@@ -1,0 +1,28 @@
+{
+  "name": "ollama-mcp-bridge",
+  "version": "0.1.0",
+  "description": "MCP server that bridges orchestrating LLMs to a local Ollama model",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "generate-config": "dist/cli/generate_config.js",
+    "bridge-setup": "dist/cli/setup.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest --run",
+    "setup": "node dist/cli/setup.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ignore": "^5.3.1",
+    "p-queue": "^8.0.1"
+  },
+  "devDependencies": {
+    "fast-check": "^3.22.0",
+    "vitest": "^2.0.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}

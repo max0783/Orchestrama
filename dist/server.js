@@ -21,42 +21,7 @@ import { ReductionLogger } from "./logging/reduction_logger.js";
 import { ProgressNotifier } from "./notifications/progress.js";
 import { createQueryHandler } from "./tools/query.js";
 import { createPingHandler } from "./tools/ping.js";
-// ---------------------------------------------------------------------------
-// Tool definitions (ListTools response)
-// ---------------------------------------------------------------------------
-const TOOL_DEFINITIONS = [
-    {
-        name: "query_local_model",
-        description: "Send a prompt to a local Ollama model, optionally with context files. Supports Map-Reduce chunking for large payloads.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                prompt: { type: "string", description: "The prompt to send to the local model" },
-                model: { type: "string", description: "Override the model to use (optional)" },
-                context_files: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "File or directory paths to include as context (optional)",
-                },
-                system_prompt: {
-                    type: "string",
-                    description: "Override the system prompt for this invocation (optional)",
-                },
-            },
-            required: ["prompt"],
-        },
-    },
-    {
-        name: "ping_model",
-        description: "Ping a local Ollama model to check its load status (warm/cold) and measure round-trip response time.",
-        inputSchema: {
-            type: "object",
-            properties: {
-                model: { type: "string", description: "Model to ping (defaults to the configured default model)" },
-            },
-        },
-    },
-];
+import { TOOL_DEFINITIONS } from "./server_tools.js";
 // ---------------------------------------------------------------------------
 // Main bootstrap
 // ---------------------------------------------------------------------------

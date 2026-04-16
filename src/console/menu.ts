@@ -1,0 +1,72 @@
+/**
+ * Menu rendering and selection parsing for the Human Console.
+ *
+ * Pure module — no I/O, no side effects — making it independently testable.
+ *
+ * Requirements: 2.2, 2.3
+ */
+
+// ---------------------------------------------------------------------------
+// MenuAction union type
+// ---------------------------------------------------------------------------
+
+export type MenuAction =
+  | "list_models"
+  | "ping_model"
+  | "set_default_model"
+  | "run_benchmark"
+  | "view_config"
+  | "view_capability_map"
+  | "view_reduction_stats"
+  | "test_config"
+  | "test_config_dry"
+  | "exit";
+
+// ---------------------------------------------------------------------------
+// renderMenu
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the full menu string with all 10 numbered entries.
+ */
+export function renderMenu(): string {
+  return [
+    "ollama-mcp-bridge Console",
+    "─────────────────────────",
+    "1. List Models",
+    "2. Ping Model",
+    "3. Set Default Model",
+    "4. Run Benchmark",
+    "5. View Configuration",
+    "6. View Capability Map",
+    "7. View Reduction Stats",
+    "8. Test Configuration",
+    "9. Test Configuration (dry run)",
+    "0. Exit",
+  ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// parseSelection
+// ---------------------------------------------------------------------------
+
+const SELECTION_MAP: Record<string, MenuAction> = {
+  "1": "list_models",
+  "2": "ping_model",
+  "3": "set_default_model",
+  "4": "run_benchmark",
+  "5": "view_config",
+  "6": "view_capability_map",
+  "7": "view_reduction_stats",
+  "8": "test_config",
+  "9": "test_config_dry",
+  "0": "exit",
+};
+
+/**
+ * Maps a user input string to a MenuAction.
+ * Returns null for any input that is not a valid selection.
+ */
+export function parseSelection(input: string): MenuAction | null {
+  return SELECTION_MAP[input] ?? null;
+}

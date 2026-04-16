@@ -62,6 +62,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     generate: mockGenerate,
     listModels: vi.fn(async () => []),
     ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
   };
 
   const fileReader = {
@@ -162,6 +163,7 @@ describe("Property 19: OOM error classification and fallback", () => {
                 generate: mockGenerate,
                 listModels: vi.fn(async () => []),
                 ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
               },
               chunker: new Chunker(mockGenerate),
               capabilityRouter: new CapabilityRouter({}, primaryModel),
@@ -242,6 +244,7 @@ describe("Property 19: OOM error classification and fallback", () => {
                 generate: mockGenerate,
                 listModels: vi.fn(async () => []),
                 ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
               },
               chunker: new Chunker(mockGenerate),
               capabilityRouter: new CapabilityRouter({}, primaryModel),
@@ -307,6 +310,7 @@ describe("Property 19: OOM error classification and fallback", () => {
                 generate: mockGenerate,
                 listModels: vi.fn(async () => []),
                 ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
               },
               chunker: new Chunker(mockGenerate),
               capabilityRouter: new CapabilityRouter({}, primaryModel),

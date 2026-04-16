@@ -106,5 +106,51 @@ export class OllamaClient {
             (loadDuration !== null && loadDuration < 100_000_000);
         return { loaded, responseTimeMs };
     }
+    async showModel(model) {
+        const url = `${this.baseUrl}/api/show`;
+        let response;
+        try {
+            response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model, verbose: true }),
+            });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("ECONNREFUSED") ||
+                msg.includes("fetch failed") ||
+                msg.includes("ENOTFOUND") ||
+                msg.includes("ECONNRESET")) {
+                throw new OllamaError(`Ollama not available at ${this.baseUrl}`, "service_unavailable");
+            }
+            throw err;
+        }
+        if (!response.ok) {
+            // Non-fatal — return empty info rather than crashing the benchmark
+            return { parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} };
+        }
+        const data = (await response.json());
+        const rawParams = data.parameters ?? "";
+        const parsedParameters = {};
+        for (const line of rawParams.split("\n")) {
+            const trimmed = line.trim();
+            if (!trimmed)
+                continue;
+            const spaceIdx = trimmed.indexOf(" ");
+            if (spaceIdx === -1)
+                continue;
+            const key = trimmed.slice(0, spaceIdx).trim();
+            const value = trimmed.slice(spaceIdx + 1).trim();
+            if (key)
+                parsedParameters[key] = value;
+        }
+        return {
+            parameters: rawParams,
+            details: data.details ?? {},
+            modelInfoRaw: data.model_info ?? {},
+            parsedParameters,
+        };
+    }
 }
 //# sourceMappingURL=client.js.map

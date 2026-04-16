@@ -1,1 +1,6 @@
 /dist
+ollama-benchmark.log
+*.json
+.kiro*
+/dist
+/dist

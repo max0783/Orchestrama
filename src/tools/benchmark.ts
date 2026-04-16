@@ -11,7 +11,7 @@
  */
 
 import fs from "fs/promises";
-import type { IOllamaClient } from "../ollama/client.js";
+import type { IOllamaClient, OllamaModelInfo } from "../ollama/client.js";
 import type { GenerateResponse } from "../types.js";
 
 // ---------------------------------------------------------------------------
@@ -57,6 +57,8 @@ export interface TaskResult {
 
 export interface ModelResult {
   model: string;
+  /** Model config fetched from /api/show — undefined if unavailable */
+  modelInfo?: OllamaModelInfo;
   tasks: TaskResult[];
   status?: "ERROR";
   error?: string;
@@ -65,6 +67,10 @@ export interface ModelResult {
 export interface BenchmarkReport {
   models: ModelResult[];
   generatedAt: string;
+  /** Whether OLLAMA_FLASH_ATTENTION was enabled for this run */
+  flashAttention: boolean;
+  /** Context window overrides applied per model */
+  contextOverrides?: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +98,8 @@ async function runTask(
   ollamaClient: IOllamaClient,
   model: string,
   prompt: string,
-  iterations: number
+  iterations: number,
+  numCtx?: number
 ): Promise<TaskMetricsWithStats | { status: "ERROR"; error: string }> {
   const latencies: number[] = [];
   const throughputs: number[] = [];
@@ -107,6 +114,7 @@ async function runTask(
         model,
         prompt,
         stream: false,
+        ...(numCtx !== undefined ? { options: { num_ctx: numCtx } } : {}),
       });
     } catch (err) {
       return {
@@ -155,13 +163,66 @@ async function runTask(
 // ---------------------------------------------------------------------------
 
 function formatReport(report: BenchmarkReport): string {
+  // Human-readable datetime alongside the ISO timestamp
+  const dt = new Date(report.generatedAt);
+  const humanDate = dt.toLocaleString("en-GB", {
+    year: "numeric", month: "short", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  });
+
+  const flashStr = report.flashAttention ? "ON" : "OFF";
+
   const lines: string[] = [
-    `Benchmark Report — ${report.generatedAt}`,
+    `Benchmark Report — ${humanDate}  (${report.generatedAt})`,
+    `Flash Attention: ${flashStr}`,
     "=".repeat(60),
   ];
 
   for (const modelResult of report.models) {
     lines.push(`\nModel: ${modelResult.model}`);
+
+    // Print model config if available
+    if (modelResult.modelInfo) {
+      const { details, parsedParameters, modelInfoRaw } = modelResult.modelInfo;
+      const configLines: string[] = [];
+
+      // Architecture from model_info (e.g. "general.architecture": "llama")
+      const arch = modelInfoRaw["general.architecture"] as string | undefined;
+      if (arch)                       configLines.push(`architecture:  ${arch}`);
+      if (details.family)             configLines.push(`family:        ${details.family}`);
+      if (details.parameter_size)     configLines.push(`params:        ${details.parameter_size}`);
+      if (details.quantization_level) configLines.push(`quantization:  ${details.quantization_level}`);
+      if (details.format)             configLines.push(`format:        ${details.format}`);
+
+      // Context length from model_info (architecture-prefixed key)
+      const ctxKey = Object.keys(modelInfoRaw).find((k) => k.endsWith(".context_length"));
+      if (ctxKey) {
+        configLines.push(`context_length ${modelInfoRaw[ctxKey]}`);
+      }
+
+      // Key inference parameters from Modelfile
+      const paramKeys = ["num_ctx", "temperature", "top_p", "top_k", "repeat_penalty", "seed", "num_predict"];
+      for (const key of paramKeys) {
+        if (key === "num_ctx") {
+          // Override wins over Modelfile value
+          const override = report.contextOverrides?.[modelResult.model];
+          if (override !== undefined) {
+            configLines.push(`${"num_ctx".padEnd(14)} ${override}  ← override`);
+          } else if (parsedParameters["num_ctx"] !== undefined) {
+            configLines.push(`${"num_ctx".padEnd(14)} ${parsedParameters["num_ctx"]}`);
+          }
+        } else if (parsedParameters[key] !== undefined) {
+          configLines.push(`${key.padEnd(14)} ${parsedParameters[key]}`);
+        }
+      }
+      if (configLines.length > 0) {
+        lines.push("  Config:");
+        for (const cl of configLines) {
+          lines.push(`    ${cl}`);
+        }
+      }
+    }
 
     if (modelResult.status === "ERROR") {
       lines.push(`  Status: ERROR — ${modelResult.error ?? "unknown error"}`);
@@ -184,11 +245,22 @@ function formatReport(report: BenchmarkReport): string {
 // Handler factory
 // ---------------------------------------------------------------------------
 
+export interface BenchmarkHandlerOptions {
+  /** Override context window per model: { "modelName": 8192 } */
+  contextOverrides?: Record<string, number>;
+  /** If true, ping each model before benchmarking to ensure it is warm */
+  warmUp?: boolean;
+  /** Progress callback — called before warm-up and before benchmarking each model */
+  onModelStart?: (model: string, phase: "warmup" | "bench") => void;
+  /** Called with the formatted ollama show summary just before tasks run */
+  onModelInfo?: (model: string, summary: string) => void;
+}
+
 export function createBenchmarkHandler(
   ollamaClient: IOllamaClient,
   benchmarkOutputFile?: string
 ) {
-  return async (args: unknown) => {
+  return async (args: unknown, opts: BenchmarkHandlerOptions = {}) => {
     const a = (args ?? {}) as Record<string, unknown>;
 
     // Resolve model list: use provided list or fall back to all available models
@@ -207,12 +279,59 @@ export function createBenchmarkHandler(
     const modelResults: ModelResult[] = [];
 
     for (const model of models) {
+      const numCtx = opts.contextOverrides?.[model];
+
+      // Warm-up: load the model at the SAME num_ctx it will be benchmarked with.
+      // Using generate directly (not ping) so we can pass options.num_ctx.
+      // This prevents Ollama from loading at the default context and then
+      // reloading at the override context on the first real task.
+      if (opts.warmUp) {
+        opts.onModelStart?.(model, "warmup");
+        try {
+          await ollamaClient.generate({
+            model,
+            prompt: "",
+            stream: false,
+            ...(numCtx !== undefined ? { options: { num_ctx: numCtx } } : {}),
+          });
+        } catch {
+          // Non-fatal — the benchmark will record the error if the model is truly unavailable
+        }
+      }
+
+      opts.onModelStart?.(model, "bench");
+
+      // Fetch model config from /api/show (non-fatal if unavailable)
+      let modelInfo: OllamaModelInfo | undefined;
+      try {
+        modelInfo = await ollamaClient.showModel(model);
+        // Emit a human-readable summary of the model config before tasks run
+        if (opts.onModelInfo && modelInfo) {
+          const { details, parsedParameters, modelInfoRaw } = modelInfo;
+          const summaryParts: string[] = [];
+          const arch = modelInfoRaw["general.architecture"] as string | undefined;
+          if (arch)                       summaryParts.push(`arch=${arch}`);
+          if (details.parameter_size)     summaryParts.push(`params=${details.parameter_size}`);
+          if (details.quantization_level) summaryParts.push(`quant=${details.quantization_level}`);
+          const ctxKey = Object.keys(modelInfoRaw).find((k) => k.endsWith(".context_length"));
+          if (ctxKey)                     summaryParts.push(`ctx=${modelInfoRaw[ctxKey]}`);
+          // Show effective num_ctx: override wins, then Modelfile value, then model default
+          const effectiveCtx = opts.contextOverrides?.[model]
+            ?? (parsedParameters["num_ctx"] ? parseInt(parsedParameters["num_ctx"], 10) : undefined);
+          if (effectiveCtx !== undefined)  summaryParts.push(`num_ctx=${effectiveCtx}${opts.contextOverrides?.[model] ? " (override)" : ""}`);
+          if (parsedParameters["temperature"]) summaryParts.push(`temp=${parsedParameters["temperature"]}`);
+          opts.onModelInfo(model, summaryParts.join("  "));
+        }
+      } catch {
+        modelInfo = undefined;
+      }
+
       const taskResults: TaskResult[] = [];
       let modelFailed = false;
       let modelError = "";
 
       for (const task of BENCHMARK_TASKS) {
-        const result = await runTask(ollamaClient, model, task.prompt, iterations);
+        const result = await runTask(ollamaClient, model, task.prompt, iterations, numCtx);
 
         if ("status" in result && result.status === "ERROR") {
           // Record error and stop further tasks for this model (Req 8.10)
@@ -230,6 +349,7 @@ export function createBenchmarkHandler(
       if (modelFailed) {
         modelResults.push({
           model,
+          modelInfo,
           tasks: [],
           status: "ERROR",
           error: modelError,
@@ -237,6 +357,7 @@ export function createBenchmarkHandler(
       } else {
         modelResults.push({
           model,
+          modelInfo,
           tasks: taskResults,
         });
       }
@@ -245,6 +366,8 @@ export function createBenchmarkHandler(
     const report: BenchmarkReport = {
       models: modelResults,
       generatedAt: new Date().toISOString(),
+      flashAttention: process.env["OLLAMA_FLASH_ATTENTION"] === "1",
+      contextOverrides: opts.contextOverrides,
     };
 
     // Save JSON results to BENCHMARK_OUTPUT_FILE if configured (Req 8.9)
@@ -259,6 +382,6 @@ export function createBenchmarkHandler(
     }
 
     const text = formatReport(report);
-    return { content: [{ type: "text" as const, text }] };
+    return { content: [{ type: "text" as const, text }], report };
   };
 }

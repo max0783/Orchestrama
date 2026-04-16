@@ -11,6 +11,8 @@
  *               6.1, 6.2, 6.3, 6.4, 7.1, 7.2, 7.3, 7.4, 7.5
  */
 
+import fs from "fs/promises";
+import path from "path";
 import readline from "readline";
 import { loadConfig } from "../config.js";
 import { OllamaClient } from "../ollama/client.js";
@@ -32,13 +34,54 @@ import {
   formatCapabilityMap,
   formatReductionStats,
   formatCheckResults,
-  formatBenchmarkReport,
 } from "./formatters.js";
 import type { BridgeConfig } from "../types.js";
 
 // ---------------------------------------------------------------------------
-// Exported helper — testable independently of the interactive loop
+// Benchmark log helper
 // ---------------------------------------------------------------------------
+
+const BENCHMARK_LOG_PATH = "./ollama-benchmark.log";
+
+async function appendBenchmarkLog(text: string): Promise<void> {
+  try {
+    await fs.appendFile(BENCHMARK_LOG_PATH, text + "\n\n", "utf-8");
+  } catch (err) {
+    process.stderr.write(
+      `[ollama-mcp-bridge] Failed to append benchmark log: ${err instanceof Error ? err.message : String(err)}\n`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Context window picker helper
+// ---------------------------------------------------------------------------
+
+const CTX_PRESETS = [4096, 8192, 16384, 32768, 65536, 131072, 262144];
+
+async function pickContextWindow(
+  rl: readline.Interface,
+  label: string
+): Promise<number | undefined> {
+  console.log(`\n${label}`);
+  CTX_PRESETS.forEach((v, i) => console.log(`  ${i + 1}. ${(v / 1024).toFixed(0)}K  (${v})`));
+  console.log(`  ${CTX_PRESETS.length + 1}. Enter custom value`);
+  console.log(`  0. Skip (use model default)`);
+
+  const sel = (await prompt(rl, "Choice: ")).trim();
+  if (sel === "0" || sel === "") return undefined;
+
+  const idx = parseInt(sel, 10) - 1;
+  if (idx >= 0 && idx < CTX_PRESETS.length) return CTX_PRESETS[idx];
+
+  if (idx === CTX_PRESETS.length) {
+    const raw = (await prompt(rl, "Enter context window (tokens): ")).trim();
+    const val = parseInt(raw, 10);
+    return !isNaN(val) && val > 0 ? val : undefined;
+  }
+
+  return undefined;
+}
 
 /**
  * Sets the default model for the current session.
@@ -161,41 +204,118 @@ async function main(): Promise<void> {
           }
           setDefaultModel(config, modelName);
           console.log(`Default model set to: ${modelName}`);
+
+          // Optionally set a context window for this model
+          const ctxVal = await pickContextWindow(rl, "Context window for this model:");
+          if (ctxVal !== undefined) {
+            config.contextWindow = ctxVal;
+            process.env["OLLAMA_CONTEXT_WINDOW"] = String(ctxVal);
+            console.log(`Context window set to: ${ctxVal}`);
+          }
           break;
         }
 
         // ------------------------------------------------------------------
         case "run_benchmark": {
+          // 1. Resolve candidate model list
+          let allModels: string[];
+          try {
+            allModels = await ollamaClient.listModels();
+          } catch {
+            allModels = [];
+          }
+
+          // 2. Let the user type specific models, or show the installed list to pick from
           const modelsInput = (
-            await prompt(rl, "Model names (comma-separated, leave blank for all): ")
-          ).trim();
-          const iterInput = (
-            await prompt(rl, "Iterations (leave blank for 1): ")
+            await prompt(rl, "Model names (comma-separated, leave blank to choose from installed): ")
           ).trim();
 
-          const models = modelsInput
-            ? modelsInput.split(",").map((m) => m.trim()).filter(Boolean)
-            : [];
+          let selectedModels: string[];
+          if (modelsInput) {
+            selectedModels = modelsInput.split(",").map((m) => m.trim()).filter(Boolean);
+          } else if (allModels.length === 0) {
+            console.log("No models available in Ollama.");
+            break;
+          } else {
+            // Show numbered list and let the user toggle models on/off
+            console.log("\nInstalled models (enter numbers to toggle, blank = use all):");
+            allModels.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
+            const toggleInput = (await prompt(rl, "Toggle off (e.g. 2,4) or press Enter to use all: ")).trim();
+            if (toggleInput) {
+              const disabled = new Set(
+                toggleInput.split(",").map((s) => parseInt(s.trim(), 10) - 1)
+              );
+              selectedModels = allModels.filter((_, i) => !disabled.has(i));
+            } else {
+              selectedModels = [...allModels];
+            }
+          }
+
+          if (selectedModels.length === 0) {
+            console.log("No models selected.");
+            break;
+          }
+
+          // 3. Context window — single for all, or custom per model
+          console.log(`\nSelected: ${selectedModels.join(", ")}`);
+          const ctxModeInput = (
+            await prompt(rl, "Context window — same for all models or custom per model? (all/custom, blank = model default): ")
+          ).trim().toLowerCase();
+
+          const contextOverrides: Record<string, number> = {};
+
+          if (ctxModeInput === "custom") {
+            for (const m of selectedModels) {
+              const val = await pickContextWindow(rl, `Context for ${m}:`);
+              if (val !== undefined) contextOverrides[m] = val;
+            }
+          } else if (ctxModeInput === "all" || ctxModeInput === "") {
+            if (ctxModeInput === "all") {
+              const val = await pickContextWindow(rl, "Context window for all models:");
+              if (val !== undefined) {
+                for (const m of selectedModels) contextOverrides[m] = val;
+              }
+            }
+            // blank → no overrides, use each model's default
+          }
+
+          // 4. Iterations
+          const iterInput = (await prompt(rl, "Iterations (leave blank for 1): ")).trim();
           const iterations = iterInput ? parseInt(iterInput, 10) : 1;
 
-          process.stdout.write("Running benchmark");
-          const progressInterval = setInterval(() => {
-            process.stdout.write(".");
-          }, 500);
+          // 5. Warm-up (default Y)
+          const warmUpInput = (await prompt(rl, "Warm up models before benchmarking? (Y/n): ")).trim().toLowerCase();
+          const warmUp = warmUpInput !== "n" && warmUpInput !== "no";
+
+          // Run benchmark — warm-up is interleaved per model inside the handler
+          process.stdout.write("Running benchmark\n");
+          const progressInterval = setInterval(() => process.stdout.write("."), 500);
 
           try {
-            const args: Record<string, unknown> = { iterations };
-            if (models.length > 0) {
-              args["models"] = models;
-            }
-            const result = await benchmarkHandler(args);
+            const args: Record<string, unknown> = { iterations, models: selectedModels };
+            const result = await benchmarkHandler(args, {
+              contextOverrides,
+              warmUp,
+              onModelStart: (model, phase) => {
+                if (phase === "warmup") {
+                  process.stdout.write(`\n  ♨ warming up ${model}...`);
+                } else {
+                  process.stdout.write(`\n  → benchmarking ${model}`);
+                }
+              },
+              onModelInfo: (_model, summary) => {
+                if (summary) process.stdout.write(`\n     ${summary}`);
+              },
+            });
             clearInterval(progressInterval);
             process.stdout.write("\n");
 
-            // Extract model results from the text for formatting
-            // The handler returns formatted text; we also use formatBenchmarkReport
-            // by re-parsing the report structure from the handler result
-            console.log("\n" + (result.content[0]?.text ?? ""));
+            const reportText = result.content[0]?.text ?? "";
+            console.log("\n" + reportText);
+
+            // 7. Append to benchmark log
+            await appendBenchmarkLog(reportText);
+            console.log(`\nReport appended to ${path.resolve(BENCHMARK_LOG_PATH)}`);
           } catch (err) {
             clearInterval(progressInterval);
             process.stdout.write("\n");

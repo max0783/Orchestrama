@@ -10,6 +10,23 @@ export interface IOllamaClient {
   generate(req: GenerateRequest): Promise<GenerateResponse>;
   listModels(): Promise<string[]>;
   ping(model: string): Promise<{ loaded: boolean; responseTimeMs: number }>;
+  showModel(model: string): Promise<OllamaModelInfo>;
+}
+
+/** Parsed model info from /api/show */
+export interface OllamaModelInfo {
+  /** Raw parameter string, e.g. "temperature 0.8\nnum_ctx 4096" */
+  parameters: string;
+  details: {
+    format?: string;
+    family?: string;
+    parameter_size?: string;
+    quantization_level?: string;
+  };
+  /** Raw model_info map from /api/show (architecture-specific fields) */
+  modelInfoRaw: Record<string, unknown>;
+  /** Parsed key→value map from the parameters string */
+  parsedParameters: Record<string, string>;
 }
 
 export class OllamaError extends Error {
@@ -143,5 +160,64 @@ export class OllamaClient {
       (loadDuration !== null && loadDuration < 100_000_000);
 
     return { loaded, responseTimeMs };
+  }
+
+  async showModel(model: string): Promise<OllamaModelInfo> {
+    const url = `${this.baseUrl}/api/show`;
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, verbose: true }),
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("fetch failed") ||
+        msg.includes("ENOTFOUND") ||
+        msg.includes("ECONNRESET")
+      ) {
+        throw new OllamaError(`Ollama not available at ${this.baseUrl}`, "service_unavailable");
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      // Non-fatal — return empty info rather than crashing the benchmark
+      return { parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} };
+    }
+
+    const data = (await response.json()) as {
+      parameters?: string;
+      details?: {
+        format?: string;
+        family?: string;
+        parameter_size?: string;
+        quantization_level?: string;
+      };
+      model_info?: Record<string, unknown>;
+    };
+
+    const rawParams = data.parameters ?? "";
+    const parsedParameters: Record<string, string> = {};
+    for (const line of rawParams.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const spaceIdx = trimmed.indexOf(" ");
+      if (spaceIdx === -1) continue;
+      const key = trimmed.slice(0, spaceIdx).trim();
+      const value = trimmed.slice(spaceIdx + 1).trim();
+      if (key) parsedParameters[key] = value;
+    }
+
+    return {
+      parameters: rawParams,
+      details: data.details ?? {},
+      modelInfoRaw: data.model_info ?? {},
+      parsedParameters,
+    };
   }
 }

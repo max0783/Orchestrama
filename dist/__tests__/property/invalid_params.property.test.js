@@ -44,6 +44,7 @@ function createMockDeps(overrides) {
         generate: mockGenerate,
         listModels: vi.fn(async () => []),
         ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+        showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
     };
     const fileReader = {
         readContextFiles: vi.fn(async (_paths) => []),

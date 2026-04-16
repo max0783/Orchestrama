@@ -40,10 +40,11 @@ export function isPathAllowed(resolvedPath, allowedDirs) {
 }
 /**
  * Load ignore rules from a .bridgeignore file in `cwd`, always including default patterns.
+ * Default patterns are added AFTER user content so they cannot be negated by the
+ * .bridgeignore file (e.g. a `!dist/` line must not re-enable dist/).
  */
 export async function loadIgnoreRules(cwd) {
     const ig = ignoreFactory();
-    ig.add(DEFAULT_IGNORE_PATTERNS);
     const bridgeignorePath = path.join(cwd, ".bridgeignore");
     try {
         const content = await fs.readFile(bridgeignorePath, "utf-8");
@@ -52,6 +53,8 @@ export async function loadIgnoreRules(cwd) {
     catch {
         // .bridgeignore doesn't exist — that's fine
     }
+    // Add defaults last so they always win over any negation in .bridgeignore
+    ig.add(DEFAULT_IGNORE_PATTERNS);
     return ig;
 }
 export class FileReader {

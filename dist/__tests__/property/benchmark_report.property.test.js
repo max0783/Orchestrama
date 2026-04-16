@@ -16,6 +16,7 @@ function createMockOllamaClient(generateFn) {
         generate: vi.fn(generateFn),
         listModels: vi.fn(async () => []),
         ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
+        showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
     };
 }
 const FIXED_RESPONSE = {

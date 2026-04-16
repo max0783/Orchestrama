@@ -53,6 +53,8 @@ export interface GenerateRequest {
   context?: number[] | null;
   keep_alive?: string;
   stream?: boolean;
+  /** Runtime options passed to Ollama (e.g. num_ctx, temperature). */
+  options?: Record<string, unknown>;
 }
 
 /** Response body from Ollama /api/generate. */

@@ -16,6 +16,8 @@ export interface IFileReader {
 export declare function isPathAllowed(resolvedPath: string, allowedDirs: string[]): boolean;
 /**
  * Load ignore rules from a .bridgeignore file in `cwd`, always including default patterns.
+ * Default patterns are added AFTER user content so they cannot be negated by the
+ * .bridgeignore file (e.g. a `!dist/` line must not re-enable dist/).
  */
 export declare function loadIgnoreRules(cwd: string): Promise<IgnoreInstance>;
 export declare class FileReader {

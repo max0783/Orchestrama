@@ -9,7 +9,7 @@
  *
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10
  */
-import type { IOllamaClient } from "../ollama/client.js";
+import type { IOllamaClient, OllamaModelInfo } from "../ollama/client.js";
 export interface TaskMetrics {
     latency: number;
     throughput: number;
@@ -26,6 +26,8 @@ export interface TaskResult {
 }
 export interface ModelResult {
     model: string;
+    /** Model config fetched from /api/show — undefined if unavailable */
+    modelInfo?: OllamaModelInfo;
     tasks: TaskResult[];
     status?: "ERROR";
     error?: string;
@@ -33,11 +35,26 @@ export interface ModelResult {
 export interface BenchmarkReport {
     models: ModelResult[];
     generatedAt: string;
+    /** Whether OLLAMA_FLASH_ATTENTION was enabled for this run */
+    flashAttention: boolean;
+    /** Context window overrides applied per model */
+    contextOverrides?: Record<string, number>;
 }
-export declare function createBenchmarkHandler(ollamaClient: IOllamaClient, benchmarkOutputFile?: string): (args: unknown) => Promise<{
+export interface BenchmarkHandlerOptions {
+    /** Override context window per model: { "modelName": 8192 } */
+    contextOverrides?: Record<string, number>;
+    /** If true, ping each model before benchmarking to ensure it is warm */
+    warmUp?: boolean;
+    /** Progress callback — called before warm-up and before benchmarking each model */
+    onModelStart?: (model: string, phase: "warmup" | "bench") => void;
+    /** Called with the formatted ollama show summary just before tasks run */
+    onModelInfo?: (model: string, summary: string) => void;
+}
+export declare function createBenchmarkHandler(ollamaClient: IOllamaClient, benchmarkOutputFile?: string): (args: unknown, opts?: BenchmarkHandlerOptions) => Promise<{
     content: {
         type: "text";
         text: string;
     }[];
+    report: BenchmarkReport;
 }>;
 //# sourceMappingURL=benchmark.d.ts.map

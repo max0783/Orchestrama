@@ -1,4 +1,8 @@
-import type { BridgeConfig, CapabilityMap } from "./types.js";
+import type { BridgeConfig, CapabilityMap, ModelOptions } from "./types.js";
+
+export const DEFAULT_MAX_CONTEXT_FILES = 20;
+export const DEFAULT_MAX_FILE_TOKENS = 1024;
+export const DEFAULT_MAX_TOTAL_CONTEXT_TOKENS = 4096;
 
 /**
  * Parses a numeric environment variable. Returns the parsed number, or null if
@@ -45,6 +49,41 @@ function parseCapabilityMap(raw: string | undefined): CapabilityMap {
 }
 
 /**
+ * Parses OLLAMA_MODEL_OPTIONS from a JSON string.
+ * Accepts only known numeric/boolean fields; unknown keys are silently dropped.
+ * On parse error, logs to stderr and returns undefined (graceful degradation).
+ */
+function parseModelOptions(raw: string | undefined): ModelOptions | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    process.stderr.write(
+      `[ollama-mcp-bridge] ERROR: Failed to parse OLLAMA_MODEL_OPTIONS as JSON: ${raw}\n`
+    );
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    process.stderr.write(
+      `[ollama-mcp-bridge] ERROR: OLLAMA_MODEL_OPTIONS must be a JSON object, got: ${raw}\n`
+    );
+    return undefined;
+  }
+  const obj = parsed as Record<string, unknown>;
+  const opts: ModelOptions = {};
+  const numFields: (keyof ModelOptions)[] = [
+    "temperature", "top_p", "top_k", "repeat_penalty", "seed", "num_predict", "min_p", "tfs_z",
+  ];
+  for (const key of numFields) {
+    if (key in obj && typeof obj[key] === "number") {
+      (opts as Record<string, unknown>)[key] = obj[key];
+    }
+  }
+  return Object.keys(opts).length > 0 ? opts : undefined;
+}
+
+/**
  * Reads all environment variables, validates types, and returns a fully
  * populated BridgeConfig. Exits with code 1 on invalid required values.
  *
@@ -77,6 +116,21 @@ export function loadConfig(): BridgeConfig {
     env["BRIDGE_REQUEST_TIMEOUT_MS"],
     300000
   );
+  const maxContextFiles = parsePositiveInt(
+    "BRIDGE_MAX_CONTEXT_FILES",
+    env["BRIDGE_MAX_CONTEXT_FILES"],
+    DEFAULT_MAX_CONTEXT_FILES
+  );
+  const maxFileTokens = parsePositiveInt(
+    "BRIDGE_MAX_FILE_TOKENS",
+    env["BRIDGE_MAX_FILE_TOKENS"],
+    DEFAULT_MAX_FILE_TOKENS
+  );
+  const maxTotalContextTokens = parsePositiveInt(
+    "BRIDGE_MAX_TOTAL_CONTEXT_TOKENS",
+    env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"],
+    DEFAULT_MAX_TOTAL_CONTEXT_TOKENS
+  );
 
   const allowedDirsRaw = env["BRIDGE_ALLOWED_DIRS"];
   const allowedDirs =
@@ -104,6 +158,8 @@ export function loadConfig(): BridgeConfig {
   const keepAliveOnStart = env["BRIDGE_KEEPALIVE_ON_START"] === "true";
 
   const benchmarkOutputFile = env["BENCHMARK_OUTPUT_FILE"];
+  const patternsFilePath = env["BRIDGE_PATTERNS_FILE"];
+  const modelOptions = parseModelOptions(env["OLLAMA_MODEL_OPTIONS"]);
 
   return {
     ollamaBaseUrl,
@@ -118,9 +174,14 @@ export function loadConfig(): BridgeConfig {
     queueMaxSize,
     numParallel,
     requestTimeoutMs,
+    maxContextFiles,
+    maxFileTokens,
+    maxTotalContextTokens,
     reductionLogPath,
     logLevel,
     disableProgress,
     ...(benchmarkOutputFile !== undefined ? { benchmarkOutputFile } : {}),
+    ...(patternsFilePath !== undefined ? { patternsFilePath } : {}),
+    ...(modelOptions !== undefined ? { modelOptions } : {}),
   };
 }

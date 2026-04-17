@@ -70,6 +70,7 @@ export async function loadIgnoreRules(cwd: string): Promise<IgnoreInstance> {
 
   // Add defaults last so they always win over any negation in .bridgeignore
   ig.add(DEFAULT_IGNORE_PATTERNS);
+  (ig as IgnoreInstance & { __baseDir?: string }).__baseDir = cwd;
 
   return ig;
 }
@@ -172,6 +173,23 @@ export class FileReader {
       ];
     }
 
+    if (this._isIgnoredPath(resolvedPath, stat.isDirectory(), ignoreRules)) {
+      process.stderr.write(
+        `[ollama-mcp-bridge] INFO: Excluding ${inputPath} (matched .bridgeignore pattern)\n`
+      );
+      if (stat.isDirectory()) {
+        return [];
+      }
+      return [
+        {
+          path: inputPath,
+          content: null,
+          error: "excluded by ignore rules",
+          tokenEstimate: 0,
+        },
+      ];
+    }
+
     if (stat.isDirectory()) {
       if (depth >= 3) {
         // Max depth reached — skip
@@ -200,18 +218,6 @@ export class FileReader {
     const results: FileReadResult[] = [];
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry);
-
-      // Apply ignore rules relative to the directory
-      if (ignoreRules) {
-        const relEntry = entry + (await this._isDir(fullPath) ? "/" : "");
-        if (ignoreRules.ignores(relEntry) || ignoreRules.ignores(entry)) {
-          process.stderr.write(
-            `[ollama-mcp-bridge] INFO: Excluding ${fullPath} (matched .bridgeignore pattern)\n`
-          );
-          continue;
-        }
-      }
-
       const subResults = await this._processPath(fullPath, ignoreRules, depth + 1);
       results.push(...subResults);
     }
@@ -224,22 +230,6 @@ export class FileReader {
     resolvedPath: string,
     ignoreRules: IgnoreInstance | undefined
   ): Promise<FileReadResult> {
-    // Apply ignore rules to the file name
-    if (ignoreRules) {
-      const basename = path.basename(resolvedPath);
-      if (ignoreRules.ignores(basename)) {
-        process.stderr.write(
-          `[ollama-mcp-bridge] INFO: Excluding ${originalPath} (matched .bridgeignore pattern)\n`
-        );
-        return {
-          path: originalPath,
-          content: null,
-          error: "excluded by ignore rules",
-          tokenEstimate: 0,
-        };
-      }
-    }
-
     let buffer: Buffer;
     try {
       buffer = await fs.readFile(resolvedPath);
@@ -289,12 +279,19 @@ export class FileReader {
     };
   }
 
-  /** Helper: check if a path is a directory without throwing. */
-  private async _isDir(p: string): Promise<boolean> {
-    try {
-      return (await fs.stat(p)).isDirectory();
-    } catch {
+  private _isIgnoredPath(
+    resolvedPath: string,
+    isDirectory: boolean,
+    ignoreRules: IgnoreInstance | undefined
+  ): boolean {
+    if (!ignoreRules) return false;
+    const baseDir =
+      (ignoreRules as IgnoreInstance & { __baseDir?: string }).__baseDir ?? process.cwd();
+    const relativePath = path.relative(baseDir, resolvedPath);
+    if (!relativePath || relativePath.startsWith("..")) {
       return false;
     }
+    const normalized = relativePath.split(path.sep).join("/");
+    return ignoreRules.ignores(isDirectory ? `${normalized}/` : normalized);
   }
 }

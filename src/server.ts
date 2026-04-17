@@ -1,9 +1,8 @@
 /**
  * MCP server entry point for ollama-mcp-bridge.
  *
- * Bootstraps the MCP server with stdio transport, registers only the two
- * query tools (query_local_model and ping_model), loads configuration, and
- * optionally pre-loads the default model on start.
+ * Bootstraps the MCP server with stdio transport, registers all bridge tools,
+ * loads configuration, and optionally pre-loads the default model on start.
  *
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2, 6.4, 6.5, 13.5
  */
@@ -26,9 +25,16 @@ import { SystemPromptInjector } from "./prompts/system_prompt.js";
 import { RequestQueue } from "./queue/request_queue.js";
 import { ReductionLogger } from "./logging/reduction_logger.js";
 import { ProgressNotifier } from "./notifications/progress.js";
+import { PatternRegistry } from "./patterns/registry.js";
+import { IntentDispatcher } from "./patterns/dispatcher.js";
 
 import { createQueryHandler } from "./tools/query.js";
 import { createPingHandler } from "./tools/ping.js";
+import { createListPatternsHandler } from "./tools/list_patterns.js";
+import { createRegisterPatternHandler } from "./tools/register_pattern.js";
+import { createGetBridgeLimitsHandler } from "./tools/get_bridge_limits.js";
+import { createSetupBridgeHandler } from "./tools/setup_bridge.js";
+import { SetupTool } from "./tools/setup_bridge_tool.js";
 import { TOOL_DEFINITIONS } from "./server_tools.js";
 
 // ---------------------------------------------------------------------------
@@ -48,6 +54,22 @@ async function main(): Promise<void> {
   const requestQueue = new RequestQueue(config.numParallel, config.queueMaxSize);
   const reductionLogger = new ReductionLogger(config.reductionLogPath);
   const ignoreRules = await loadIgnoreRules(process.cwd());
+
+  // 2a. Create PatternRegistry and IntentDispatcher
+  const patternRegistry = new PatternRegistry({
+    patternsFilePath: config.patternsFilePath,
+    ollamaClient,
+    defaultModel: config.defaultModel,
+  });
+  await patternRegistry.loadFromFile();
+  const intentDispatcher = new IntentDispatcher(patternRegistry);
+
+  // 2b. Create SetupTool
+  const setupTool = new SetupTool({
+    registry: patternRegistry,
+    ollamaClient,
+    config,
+  });
 
   // 3. Create MCP Server instance
   const server = new Server(
@@ -81,10 +103,15 @@ async function main(): Promise<void> {
     requestQueue,
     reductionLogger,
     progressNotifier,
+    intentDispatcher,
     ignoreRules,
   });
 
   const pingHandler = createPingHandler(ollamaClient, config.defaultModel);
+  const listPatternsHandler = createListPatternsHandler(patternRegistry);
+  const registerPatternHandler = createRegisterPatternHandler(patternRegistry);
+  const getBridgeLimitsHandler = createGetBridgeLimitsHandler(config);
+  const setupBridgeHandler = createSetupBridgeHandler(setupTool);
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -94,6 +121,14 @@ async function main(): Promise<void> {
         return queryHandler(args);
       case "ping_model":
         return pingHandler(args);
+      case "list_patterns":
+        return listPatternsHandler(args);
+      case "register_pattern":
+        return registerPatternHandler(args);
+      case "get_bridge_limits":
+        return getBridgeLimitsHandler(args);
+      case "setup_bridge":
+        return setupBridgeHandler(args);
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }

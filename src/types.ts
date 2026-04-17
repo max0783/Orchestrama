@@ -40,8 +40,38 @@ export interface BridgeConfig {
   logLevel: "info" | "debug";
   /** BRIDGE_DISABLE_PROGRESS — default false */
   disableProgress: boolean;
+  /** BRIDGE_MAX_CONTEXT_FILES — default 20 */
+  maxContextFiles?: number;
+  /** BRIDGE_MAX_FILE_TOKENS — default 1024 */
+  maxFileTokens?: number;
+  /** BRIDGE_MAX_TOTAL_CONTEXT_TOKENS — default 4096 */
+  maxTotalContextTokens?: number;
   /** BENCHMARK_OUTPUT_FILE — optional */
   benchmarkOutputFile?: string;
+  /** BRIDGE_PATTERNS_FILE — optional path for persisting custom patterns */
+  patternsFilePath?: string;
+  /** OLLAMA_MODEL_OPTIONS — JSON object of fine-tuning options (temperature, top_p, etc.) */
+  modelOptions?: ModelOptions;
+}
+
+/** A named, reusable usage pattern that maps an intent to a system prompt and model preference. */
+export interface UsagePattern {
+  name: string;               // unique identifier, kebab-case
+  description: string;        // human-readable description
+  systemPrompt: string;       // the instruction set for the model
+  modelPreference?: string;   // optional preferred model
+  keywords: string[];         // alias strings for intent matching
+  isBuiltIn: boolean;         // true = cannot be overwritten/deleted
+}
+
+/** Array of these objects written to BRIDGE_PATTERNS_FILE. */
+export interface PersistedPattern {
+  name: string;
+  description: string;
+  systemPrompt: string;
+  modelPreference?: string;
+  keywords: string[];
+  // isBuiltIn is always false for persisted patterns; not stored
 }
 
 /** Request body sent to Ollama /api/generate. */
@@ -107,4 +137,27 @@ export interface QueueStatus {
   queueLength: number;
   activeRequests: number;
   concurrencyLimit: number;
+}
+
+/**
+ * Fine-tuning options forwarded to Ollama's /api/generate `options` field.
+ * All fields are optional — only set values are sent.
+ */
+export interface ModelOptions {
+  /** Sampling temperature (0.0–2.0). Lower = more deterministic. Default: model default */
+  temperature?: number;
+  /** Top-p nucleus sampling (0.0–1.0). Default: model default */
+  top_p?: number;
+  /** Top-k sampling. 0 = disabled. Default: model default */
+  top_k?: number;
+  /** Penalise repeated tokens (1.0 = no penalty). Default: model default */
+  repeat_penalty?: number;
+  /** Fixed random seed for reproducible outputs. -1 = random. Default: -1 */
+  seed?: number;
+  /** Maximum tokens to generate. -1 = model default. */
+  num_predict?: number;
+  /** Minimum probability for a token to be considered. Default: model default */
+  min_p?: number;
+  /** Tail-free sampling parameter. Default: model default */
+  tfs_z?: number;
 }

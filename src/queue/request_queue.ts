@@ -66,7 +66,7 @@ export class RequestQueue {
    * @throws          QueueFullError  — when the waiting queue is at capacity.
    * @throws          RequestTimeoutError — when `fn()` takes longer than `timeoutMs`.
    */
-  async enqueue<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
+  async enqueue<T>(fn: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
     // Reject immediately if the waiting queue is full (Req 18.4)
     if (this.queue.size >= this.maxSize) {
       throw new QueueFullError();
@@ -86,11 +86,13 @@ export class RequestQueue {
 
       // Per-request timeout (Req 18.3)
       return new Promise<T>((resolve, reject) => {
+        const abortController = new AbortController();
         const timer = setTimeout(() => {
+          abortController.abort();
           reject(new RequestTimeoutError(timeoutMs));
         }, timeoutMs);
 
-        fn().then(
+        fn(abortController.signal).then(
           (result) => {
             clearTimeout(timer);
             resolve(result);

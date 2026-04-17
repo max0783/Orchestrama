@@ -5,14 +5,19 @@
  * estimates tokens, enqueues the request, processes via Chunker (with OOM
  * fallback), appends a reduction record, and returns the response.
  *
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 7.1, 7.2, 7.3, 7.4, 11.9,
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 7.1, 7.2, 7.3, 7.4, 11.9,
  *               17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8
  */
 
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { estimateTokens } from "../chunking/index.js";
 import { OllamaError } from "../ollama/client.js";
-import type { BridgeConfig } from "../types.js";
+import {
+  DEFAULT_MAX_CONTEXT_FILES,
+  DEFAULT_MAX_FILE_TOKENS,
+  DEFAULT_MAX_TOTAL_CONTEXT_TOKENS,
+} from "../config.js";
+import type { BridgeConfig, TaskType, ModelOptions } from "../types.js";
 import type { IOllamaClient } from "../ollama/client.js";
 import type { IFileReader, IgnoreInstance } from "../files/reader.js";
 import type { Chunker } from "../chunking/index.js";
@@ -21,6 +26,7 @@ import type { SystemPromptInjector } from "../prompts/system_prompt.js";
 import type { RequestQueue } from "../queue/request_queue.js";
 import type { IReductionLogger } from "../logging/reduction_logger.js";
 import type { ProgressNotifier } from "../notifications/progress.js";
+import type { IntentDispatcher } from "../patterns/dispatcher.js";
 
 // ---------------------------------------------------------------------------
 // Dependency injection interface
@@ -36,6 +42,7 @@ export interface QueryHandlerDeps {
   requestQueue: RequestQueue;
   reductionLogger: IReductionLogger;
   progressNotifier: ProgressNotifier;
+  intentDispatcher: IntentDispatcher;
   ignoreRules?: IgnoreInstance;
 }
 
@@ -48,6 +55,8 @@ interface ValidatedInput {
   model: string | undefined;
   context_files: string[];
   system_prompt: string | undefined;
+  intent: string | undefined;
+  options: ModelOptions | undefined;
 }
 
 function validateInput(args: unknown): ValidatedInput {
@@ -102,11 +111,49 @@ function validateInput(args: unknown): ValidatedInput {
     );
   }
 
+  // intent — optional string
+  if (a["intent"] !== undefined && typeof a["intent"] !== "string") {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `"intent" must be a string, got ${typeof a["intent"]}`
+    );
+  }
+
+  // options — optional object with known numeric fields
+  let options: ModelOptions | undefined;
+  if (a["options"] !== undefined) {
+    if (typeof a["options"] !== "object" || a["options"] === null || Array.isArray(a["options"])) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `"options" must be an object, got ${typeof a["options"]}`
+      );
+    }
+    const o = a["options"] as Record<string, unknown>;
+    const parsed: ModelOptions = {};
+    const numFields: (keyof ModelOptions)[] = [
+      "temperature", "top_p", "top_k", "repeat_penalty", "seed", "num_predict", "min_p", "tfs_z",
+    ];
+    for (const key of numFields) {
+      if (key in o) {
+        if (typeof o[key] !== "number") {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `"options.${key}" must be a number, got ${typeof o[key]}`
+          );
+        }
+        (parsed as Record<string, unknown>)[key] = o[key];
+      }
+    }
+    options = Object.keys(parsed).length > 0 ? parsed : undefined;
+  }
+
   return {
     prompt: a["prompt"] as string,
     model: a["model"] as string | undefined,
     context_files: (a["context_files"] as string[] | undefined) ?? [],
     system_prompt: a["system_prompt"] as string | undefined,
+    intent: a["intent"] as string | undefined,
+    options,
   };
 }
 
@@ -126,6 +173,7 @@ export function createQueryHandler(
     requestQueue,
     reductionLogger,
     progressNotifier,
+    intentDispatcher,
     ignoreRules,
   } = deps;
 
@@ -133,19 +181,68 @@ export function createQueryHandler(
     // -----------------------------------------------------------------------
     // 1. Validate input
     // -----------------------------------------------------------------------
-    const { prompt, model: explicitModel, context_files, system_prompt } =
+    const { prompt, model: explicitModel, context_files, system_prompt, intent, options: callOptions } =
       validateInput(args);
+    const maxContextFiles =
+      config.maxContextFiles ?? DEFAULT_MAX_CONTEXT_FILES;
+    const maxFileTokens =
+      config.maxFileTokens ?? DEFAULT_MAX_FILE_TOKENS;
+    const maxTotalContextTokens =
+      config.maxTotalContextTokens ?? DEFAULT_MAX_TOTAL_CONTEXT_TOKENS;
+
+    if (context_files.length > maxContextFiles) {
+      throw new McpError(
+        ErrorCode.InvalidParams,
+        `"context_files" exceeds limit: received ${context_files.length}, maximum is ${maxContextFiles}`
+      );
+    }
 
     // -----------------------------------------------------------------------
-    // 2. Resolve model
+    // 2. Resolve model and system prompt using priority table:
+    //    Priority 1 (highest): explicit system_prompt param / explicit model param
+    //    Priority 2:           matched pattern's systemPrompt / modelPreference
+    //    Priority 3 (lowest):  SystemPromptInjector detection / CapabilityRouter
     // -----------------------------------------------------------------------
-    const resolvedModel = capabilityRouter.resolveModel(prompt, explicitModel);
+
+    let patternSystemPrompt: string | undefined;
+    let patternModelPreference: string | undefined;
+
+    // Attempt intent dispatch when intent is present and non-empty (Req 1.1, 1.2)
+    if (intent && intent.trim() !== "") {
+      const dispatchResult = intentDispatcher.resolve(intent);
+      if (dispatchResult !== null) {
+        patternSystemPrompt = dispatchResult.pattern.systemPrompt;
+        patternModelPreference = dispatchResult.pattern.modelPreference;
+      }
+      // If dispatchResult is null, fall through to existing path (Req 1.2)
+    }
+
+    // Resolve model: explicit param > pattern preference > CapabilityRouter (Req 1.4)
+    const resolvedModel = capabilityRouter.resolveModel(
+      prompt,
+      explicitModel ?? patternModelPreference
+    );
 
     // -----------------------------------------------------------------------
     // 3. Detect task type and build system prompt
     // -----------------------------------------------------------------------
-    const taskType = systemPromptInjector.detect(prompt);
-    const systemPrompt = systemPromptInjector.build(taskType, system_prompt);
+    // Priority: explicit system_prompt > pattern systemPrompt > SystemPromptInjector
+    let systemPrompt: string;
+    let taskType: TaskType;
+
+    if (system_prompt !== undefined) {
+      // Priority 1: explicit system_prompt param
+      taskType = systemPromptInjector.detect(prompt);
+      systemPrompt = systemPromptInjector.build(taskType, system_prompt);
+    } else if (patternSystemPrompt !== undefined) {
+      // Priority 2: matched pattern's systemPrompt (Req 1.3)
+      taskType = systemPromptInjector.detect(prompt);
+      systemPrompt = patternSystemPrompt;
+    } else {
+      // Priority 3: SystemPromptInjector task-type detection
+      taskType = systemPromptInjector.detect(prompt);
+      systemPrompt = systemPromptInjector.build(taskType, undefined);
+    }
 
     // -----------------------------------------------------------------------
     // 4. Read context files (if any) and send per-file progress notifications
@@ -156,6 +253,27 @@ export function createQueryHandler(
     if (context_files.length > 0) {
       const results = await fileReader.readContextFiles(context_files, ignoreRules);
       fileCount = results.length;
+
+      const oversizedFile = results.find(
+        (result) => result.content !== null && result.tokenEstimate > maxFileTokens
+      );
+      if (oversizedFile) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Context file too large: "${oversizedFile.path}" estimated at ${oversizedFile.tokenEstimate} tokens (limit ${maxFileTokens})`
+        );
+      }
+
+      const totalContextTokens = results.reduce(
+        (sum, result) => (result.content !== null ? sum + result.tokenEstimate : sum),
+        0
+      );
+      if (totalContextTokens > maxTotalContextTokens) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `Combined context files exceed token limit: ${totalContextTokens} tokens (limit ${maxTotalContextTokens})`
+        );
+      }
 
       // Send a progress notification for each file read (Req 15.5)
       for (const result of results) {
@@ -186,7 +304,7 @@ export function createQueryHandler(
     // -----------------------------------------------------------------------
     const invocationStart = Date.now();
 
-    const response = await requestQueue.enqueue(async () => {
+    const response = await requestQueue.enqueue(async (signal) => {
       // Send "started" progress notification (Req 15.2)
       const estimatedChunks = Math.ceil(
         tokenEstimate / Math.max(1, Math.floor(config.contextWindow * 0.9))
@@ -201,14 +319,21 @@ export function createQueryHandler(
       let fallbackWarning: string | null = null;
 
       const tryProcess = async (model: string) => {
+        // Merge: call-level options override config-level defaults
+        const mergedOptions: ModelOptions | undefined =
+          callOptions || config.modelOptions
+            ? { ...config.modelOptions, ...callOptions }
+            : undefined;
+
         return chunker.process(
           fullPayload,
           systemPrompt,
-          {
-            contextWindow: config.contextWindow,
-            systemPromptTokens,
-            model,
-          },
+            {
+              contextWindow: config.contextWindow,
+              systemPromptTokens,
+              model,
+              modelOptions: mergedOptions,
+            },
           (event) => {
             // Forward chunker progress events to the progress notifier
             if (event.type === "chunk_done") {
@@ -218,7 +343,9 @@ export function createQueryHandler(
             }
             // "started" events from the chunker are informational; we already
             // sent our own "started" notification above.
-          }
+          },
+          0,
+          signal
         );
       };
 

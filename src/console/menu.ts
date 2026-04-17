@@ -20,6 +20,8 @@ export type MenuAction =
   | "view_reduction_stats"
   | "test_config"
   | "test_config_dry"
+  | "edit_bridge_limits"
+  | "edit_model_options"
   | "exit";
 
 // ---------------------------------------------------------------------------
@@ -27,7 +29,7 @@ export type MenuAction =
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the full menu string with all 10 numbered entries.
+ * Returns the full menu string with all 12 numbered entries.
  */
 export function renderMenu(): string {
   return [
@@ -42,6 +44,8 @@ export function renderMenu(): string {
     "7. View Reduction Stats",
     "8. Test Configuration",
     "9. Test Configuration (dry run)",
+    "10. Edit Bridge Limits",
+    "11. Edit Model Options",
     "0. Exit",
   ].join("\n");
 }
@@ -60,6 +64,8 @@ const SELECTION_MAP: Record<string, MenuAction> = {
   "7": "view_reduction_stats",
   "8": "test_config",
   "9": "test_config_dry",
+  "10": "edit_bridge_limits",
+  "11": "edit_model_options",
   "0": "exit",
 };
 

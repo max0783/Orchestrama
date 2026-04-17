@@ -1,4 +1,4 @@
-import type { GenerateRequest, GenerateResponse, ChunkResult } from "../types.js";
+import type { GenerateRequest, GenerateResponse, ChunkResult, ModelOptions } from "../types.js";
 
 export type ProgressCallback = (event: ProgressEvent) => void;
 
@@ -11,6 +11,8 @@ export interface ChunkingOptions {
   contextWindow: number;
   systemPromptTokens: number;
   model: string;
+  /** Fine-tuning options forwarded to Ollama (temperature, top_p, etc.) */
+  modelOptions?: ModelOptions;
 }
 
 /**
@@ -81,6 +83,16 @@ export function splitIntoChunks(payload: string, maxTokens: number): string[] {
 }
 
 /**
+ * Builds the Ollama `options` object from ChunkingOptions.modelOptions,
+ * also injecting num_ctx from contextWindow so Ollama uses the right KV cache size.
+ */
+function buildOllamaOptions(opts: ChunkingOptions): Record<string, unknown> | undefined {
+  const base: Record<string, unknown> = { num_ctx: opts.contextWindow };
+  if (!opts.modelOptions) return base;
+  return { ...base, ...opts.modelOptions };
+}
+
+/**
  * Map-Reduce chunker that processes large payloads by splitting into chunks,
  * summarizing each chunk independently (Map phase), then recursively reducing
  * the summaries (Reduce phase).
@@ -88,7 +100,10 @@ export function splitIntoChunks(payload: string, maxTokens: number): string[] {
  */
 export class Chunker {
   constructor(
-    private ollamaGenerate: (req: GenerateRequest) => Promise<GenerateResponse>
+    private ollamaGenerate: (
+      req: GenerateRequest,
+      options?: { signal?: AbortSignal }
+    ) => Promise<GenerateResponse>
   ) {}
 
   async process(
@@ -96,7 +111,8 @@ export class Chunker {
     systemPrompt: string,
     opts: ChunkingOptions,
     onProgress: ProgressCallback,
-    depth = 0
+    depth = 0,
+    abortSignal?: AbortSignal
   ): Promise<ChunkResult> {
     // Recursion guard — Requirements: 4.7
     if (depth >= 10) {
@@ -119,7 +135,8 @@ export class Chunker {
         system: systemPrompt,
         context: null,
         stream: false,
-      });
+        options: buildOllamaOptions(opts),
+      }, { signal: abortSignal });
       return {
         finalResponse: response.response,
         chunksUsed: 1,
@@ -145,7 +162,8 @@ export class Chunker {
         system: systemPrompt,
         context: null,
         stream: false,
-      });
+        options: buildOllamaOptions(opts),
+      }, { signal: abortSignal });
       summaries.push(response.response);
       onProgress({
         type: "chunk_done",
@@ -159,6 +177,6 @@ export class Chunker {
     const reducedInput = summaries.join("\n---\n");
     onProgress({ type: "reducing", summaryCount: summaries.length });
 
-    return this.process(reducedInput, systemPrompt, opts, onProgress, depth + 1);
+    return this.process(reducedInput, systemPrompt, opts, onProgress, depth + 1, abortSignal);
   }
 }

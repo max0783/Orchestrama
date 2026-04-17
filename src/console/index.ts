@@ -35,7 +35,48 @@ import {
   formatReductionStats,
   formatCheckResults,
 } from "./formatters.js";
-import type { BridgeConfig } from "../types.js";
+import type { BridgeConfig, ModelOptions } from "../types.js";
+
+// ---------------------------------------------------------------------------
+// Context window auto-detection from Ollama model_info
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempts to extract the context window size from Ollama's model_info map.
+ * Ollama returns architecture-specific keys like "llama.context_length",
+ * "qwen2.context_length", etc. Falls back to scanning all numeric values
+ * whose key contains "context".
+ */
+function detectContextWindow(modelInfoRaw: Record<string, unknown>): number | undefined {
+  // Try common architecture-specific keys first
+  const candidates = [
+    "llama.context_length",
+    "qwen2.context_length",
+    "mistral.context_length",
+    "phi3.context_length",
+    "gemma.context_length",
+    "gemma2.context_length",
+    "falcon.context_length",
+    "mpt.context_length",
+    "gpt_neox.context_length",
+    "bloom.context_length",
+    "starcoder.context_length",
+  ];
+
+  for (const key of candidates) {
+    const val = modelInfoRaw[key];
+    if (typeof val === "number" && val > 0) return val;
+  }
+
+  // Generic fallback: any key containing "context" with a positive numeric value
+  for (const [key, val] of Object.entries(modelInfoRaw)) {
+    if (key.toLowerCase().includes("context") && typeof val === "number" && val > 0) {
+      return val;
+    }
+  }
+
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Benchmark log helper
@@ -211,6 +252,19 @@ async function main(): Promise<void> {
             config.contextWindow = ctxVal;
             process.env["OLLAMA_CONTEXT_WINDOW"] = String(ctxVal);
             console.log(`Context window set to: ${ctxVal}`);
+          } else {
+            // Auto-detect context window from Ollama model info
+            try {
+              const info = await ollamaClient.showModel(modelName);
+              const detected = detectContextWindow(info.modelInfoRaw);
+              if (detected !== undefined) {
+                config.contextWindow = detected;
+                process.env["OLLAMA_CONTEXT_WINDOW"] = String(detected);
+                console.log(`Context window auto-detected from model: ${detected}`);
+              }
+            } catch {
+              // Non-fatal — keep existing context window
+            }
           }
           break;
         }
@@ -376,6 +430,128 @@ async function main(): Promise<void> {
           const result = await testConfigHandler({ dry_run: true });
           const text = result.content[0]?.text ?? "";
           console.log("\n" + text);
+          break;
+        }
+
+        // ------------------------------------------------------------------
+        case "edit_bridge_limits": {
+          console.log("\nCurrent bridge limits:");
+          console.log(`  maxContextFiles:       ${config.maxContextFiles ?? 20}`);
+          console.log(`  maxFileTokens:         ${config.maxFileTokens ?? 1024}`);
+          console.log(`  maxTotalContextTokens: ${config.maxTotalContextTokens ?? 4096}`);
+          console.log(`  contextWindow:         ${config.contextWindow}`);
+          console.log("\nPress Enter to keep the current value for any field.\n");
+
+          const filesInput = (
+            await prompt(rl, `Max context files [${config.maxContextFiles ?? 20}]: `)
+          ).trim();
+          if (filesInput !== "") {
+            const val = parseInt(filesInput, 10);
+            if (!isNaN(val) && val > 0) {
+              config.maxContextFiles = val;
+              process.env["BRIDGE_MAX_CONTEXT_FILES"] = String(val);
+            } else {
+              console.log("  Invalid value, skipped.");
+            }
+          }
+
+          const fileTokensInput = (
+            await prompt(rl, `Max file tokens [${config.maxFileTokens ?? 1024}]: `)
+          ).trim();
+          if (fileTokensInput !== "") {
+            const val = parseInt(fileTokensInput, 10);
+            if (!isNaN(val) && val > 0) {
+              config.maxFileTokens = val;
+              process.env["BRIDGE_MAX_FILE_TOKENS"] = String(val);
+            } else {
+              console.log("  Invalid value, skipped.");
+            }
+          }
+
+          const totalTokensInput = (
+            await prompt(rl, `Max total context tokens [${config.maxTotalContextTokens ?? 4096}]: `)
+          ).trim();
+          if (totalTokensInput !== "") {
+            const val = parseInt(totalTokensInput, 10);
+            if (!isNaN(val) && val > 0) {
+              config.maxTotalContextTokens = val;
+              process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] = String(val);
+            } else {
+              console.log("  Invalid value, skipped.");
+            }
+          }
+
+          const ctxWinVal = await pickContextWindow(rl, "Context window (used for chunking):");
+          if (ctxWinVal !== undefined) {
+            config.contextWindow = ctxWinVal;
+            process.env["OLLAMA_CONTEXT_WINDOW"] = String(ctxWinVal);
+          }
+
+          console.log("\nUpdated bridge limits:");
+          console.log(`  maxContextFiles:       ${config.maxContextFiles ?? 20}`);
+          console.log(`  maxFileTokens:         ${config.maxFileTokens ?? 1024}`);
+          console.log(`  maxTotalContextTokens: ${config.maxTotalContextTokens ?? 4096}`);
+          console.log(`  contextWindow:         ${config.contextWindow}`);
+          break;
+        }
+
+        // ------------------------------------------------------------------
+        case "edit_model_options": {
+          const cur = config.modelOptions ?? {};
+          console.log("\nCurrent model options (press Enter to keep, type 'clear' to unset):");
+          console.log(`  temperature:    ${cur.temperature ?? "(model default)"}`);
+          console.log(`  top_p:          ${cur.top_p ?? "(model default)"}`);
+          console.log(`  top_k:          ${cur.top_k ?? "(model default)"}`);
+          console.log(`  repeat_penalty: ${cur.repeat_penalty ?? "(model default)"}`);
+          console.log(`  seed:           ${cur.seed ?? "(random)"}`);
+          console.log(`  num_predict:    ${cur.num_predict ?? "(model default)"}`);
+          console.log(`  min_p:          ${cur.min_p ?? "(model default)"}`);
+          console.log(`  tfs_z:          ${cur.tfs_z ?? "(model default)"}`);
+          console.log("");
+
+          const updated: ModelOptions = { ...cur };
+
+          async function editNumericOption(
+            key: keyof ModelOptions,
+            label: string,
+            hint: string
+          ): Promise<void> {
+            const current = cur[key];
+            const raw = (await prompt(rl, `  ${label} [${current ?? "model default"}] ${hint}: `)).trim();
+            if (raw === "") return;
+            if (raw.toLowerCase() === "clear") {
+              delete updated[key];
+              return;
+            }
+            const val = parseFloat(raw);
+            if (!isNaN(val)) {
+              (updated as Record<string, unknown>)[key] = val;
+            } else {
+              console.log(`    Invalid value, skipped.`);
+            }
+          }
+
+          await editNumericOption("temperature",    "temperature",    "(0.0–2.0, lower = more deterministic)");
+          await editNumericOption("top_p",          "top_p",          "(0.0–1.0)");
+          await editNumericOption("top_k",          "top_k",          "(integer, 0 = disabled)");
+          await editNumericOption("repeat_penalty", "repeat_penalty", "(1.0 = no penalty)");
+          await editNumericOption("seed",           "seed",           "(integer, -1 = random)");
+          await editNumericOption("num_predict",    "num_predict",    "(integer, -1 = model default)");
+          await editNumericOption("min_p",          "min_p",          "(0.0–1.0)");
+          await editNumericOption("tfs_z",          "tfs_z",          "(float)");
+
+          config.modelOptions = Object.keys(updated).length > 0 ? updated : undefined;
+          process.env["OLLAMA_MODEL_OPTIONS"] = JSON.stringify(updated);
+
+          console.log("\nUpdated model options:");
+          const display = config.modelOptions ?? {};
+          const keys: (keyof ModelOptions)[] = [
+            "temperature", "top_p", "top_k", "repeat_penalty", "seed", "num_predict", "min_p", "tfs_z",
+          ];
+          for (const k of keys) {
+            if (k in display) console.log(`  ${k}: ${display[k]}`);
+          }
+          if (Object.keys(display).length === 0) console.log("  (all cleared — using model defaults)");
           break;
         }
       }

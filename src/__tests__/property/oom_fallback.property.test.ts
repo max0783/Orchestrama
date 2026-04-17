@@ -14,6 +14,8 @@ import { SystemPromptInjector } from "../../prompts/system_prompt.js";
 import { RequestQueue } from "../../queue/request_queue.js";
 import { ProgressNotifier } from "../../notifications/progress.js";
 import { OllamaError } from "../../ollama/client.js";
+import { PatternRegistry } from "../../patterns/registry.js";
+import { IntentDispatcher } from "../../patterns/dispatcher.js";
 import type { QueryHandlerDeps } from "../../tools/query.js";
 import type { BridgeConfig } from "../../types.js";
 import type { GenerateRequest, GenerateResponse, FileReadResult } from "../../types.js";
@@ -98,6 +100,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     requestQueue,
     reductionLogger,
     progressNotifier,
+    intentDispatcher: new IntentDispatcher(new PatternRegistry()),
     ...overrides,
   };
 }

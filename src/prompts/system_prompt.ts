@@ -6,27 +6,13 @@ import type { TaskType } from "../types.js";
 // summarization: must contain "3 to 5 lines" (dense summary)
 // generic: must contain instructions to omit preamble/filler
 
-const BUILT_IN_DEFAULT = `You are a concise assistant. Return only essential information.
-- Omit preamble and filler phrases (e.g. "Sure!", "Of course!", "Here is...").
-- Use structured formats (bullet points, key:value pairs, short code blocks) over prose.
-- Omit any explanation of your own reasoning process.`;
+const BUILT_IN_DEFAULT = `Return only essential information. No preamble. No filler phrases (e.g. "Sure!", "Of course!", "Here is..."). No explanation of your reasoning. Use bullet points or key:value pairs over prose.`;
 
-const CODE_REVIEW_PROMPT = `You are a code reviewer. Return only findings (issues, risks, suggestions).
-- Omit any description of what the code does.
-- Use bullet points for each finding.
-- Omit preamble and filler phrases.
-- Omit any explanation of your reasoning process.`;
+const CODE_REVIEW_PROMPT = `Return only a bullet list of findings: issues, risks, suggestions. One bullet per finding. No preamble. No description of what the code does. No reasoning explanation. If nothing to report, output only: 'No findings.'`;
 
-const LOG_ANALYSIS_PROMPT = `You are a log analyst. Return only anomalies, errors, and patterns.
-- Omit any summary of normal operations.
-- Use bullet points for each anomaly or error.
-- Omit preamble and filler phrases.
-- Omit any explanation of your reasoning process.`;
+const LOG_ANALYSIS_PROMPT = `Return only anomalies, errors, and notable patterns. One bullet per finding with timestamp (if present) and severity. No summary of normal operations. No preamble. No reasoning explanation. If nothing found, output only: 'No anomalies found.'`;
 
-const SUMMARIZATION_PROMPT = `You are a summarizer. Return a maximum of 3 to 5 lines of dense summary.
-- Use the most important facts only.
-- Omit preamble and filler phrases.
-- Omit any explanation of your reasoning process.`;
+const SUMMARIZATION_PROMPT = `Output 3 to 5 lines of dense summary. Key points and outcomes only. Plain prose. No headings. No bullets. No preamble.`;
 
 export class SystemPromptInjector {
   constructor(

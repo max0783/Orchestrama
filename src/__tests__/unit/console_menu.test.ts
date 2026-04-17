@@ -44,6 +44,8 @@ describe("parseSelection()", () => {
     ["7", "view_reduction_stats"],
     ["8", "test_config"],
     ["9", "test_config_dry"],
+    ["10", "edit_bridge_limits"],
+    ["11", "edit_model_options"],
     ["0", "exit"],
   ];
 
@@ -65,7 +67,7 @@ describe("parseSelection()", () => {
   });
 
   it("returns null for out-of-range numbers", () => {
-    expect(parseSelection("10")).toBeNull();
+    expect(parseSelection("12")).toBeNull();
     expect(parseSelection("-1")).toBeNull();
     expect(parseSelection("99")).toBeNull();
   });
@@ -78,6 +80,6 @@ describe("parseSelection()", () => {
 
   it("returns null for multi-character strings that are not valid", () => {
     expect(parseSelection("01")).toBeNull();
-    expect(parseSelection("11")).toBeNull();
+    expect(parseSelection("12")).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ export type OllamaErrorCode =
 
 /** Interface for the Ollama HTTP client — use this in dependency injection so tests can pass plain objects. */
 export interface IOllamaClient {
-  generate(req: GenerateRequest): Promise<GenerateResponse>;
+  generate(req: GenerateRequest, options?: { signal?: AbortSignal }): Promise<GenerateResponse>;
   listModels(): Promise<string[]>;
   ping(model: string): Promise<{ loaded: boolean; responseTimeMs: number }>;
   showModel(model: string): Promise<OllamaModelInfo>;
@@ -55,7 +55,10 @@ export class OllamaClient {
     this.keepAlive = keepAlive;
   }
 
-  async generate(req: GenerateRequest): Promise<GenerateResponse> {
+  async generate(
+    req: GenerateRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<GenerateResponse> {
     const url = `${this.baseUrl}/api/generate`;
     const body = {
       ...req,
@@ -69,6 +72,7 @@ export class OllamaClient {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: options?.signal,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

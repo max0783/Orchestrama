@@ -1,6 +1,6 @@
-// Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names
+// Feature: dual-console-separation, Property 2: MCP server rejects unknown tool names
 //
-// For any string that is not "query_local_model" or "ping_model", calling CallTool
+// For any string that is not a registered tool name, calling CallTool
 // with that name SHALL throw an McpError with ErrorCode.MethodNotFound.
 //
 // **Validates: Requirements 1.3**
@@ -20,6 +20,14 @@ function dispatch(name: string): void {
       return;
     case "ping_model":
       return;
+    case "list_patterns":
+      return;
+    case "register_pattern":
+      return;
+    case "get_bridge_limits":
+      return;
+    case "setup_bridge":
+      return;
     default:
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
   }
@@ -29,16 +37,21 @@ function dispatch(name: string): void {
 // Property 2: MCP server rejects all non-query tool names
 // ---------------------------------------------------------------------------
 
-describe("Property 2: MCP server rejects all non-query tool names", () => {
+describe("Property 2: MCP server rejects unknown tool names", () => {
   // Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names
   it(
     "throws McpError(MethodNotFound) for any string that is not a known tool name",
     () => {
       fc.assert(
         fc.property(
-          fc.string().filter(
-            (s) => s !== "query_local_model" && s !== "ping_model"
-          ),
+          fc.string().filter((s) => ![
+            "query_local_model",
+            "ping_model",
+            "list_patterns",
+            "register_pattern",
+            "get_bridge_limits",
+            "setup_bridge",
+          ].includes(s)),
           (name) => {
             let thrownError: unknown;
             try {
@@ -57,14 +70,18 @@ describe("Property 2: MCP server rejects all non-query tool names", () => {
     15_000
   );
 
-  // Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names
+  // Feature: dual-console-separation, Property 2: MCP server rejects unknown tool names
   it('does NOT throw for "query_local_model"', () => {
     expect(() => dispatch("query_local_model")).not.toThrow();
   });
 
-  // Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names
+  // Feature: dual-console-separation, Property 2: MCP server rejects unknown tool names
   it('does NOT throw for "ping_model"', () => {
     expect(() => dispatch("ping_model")).not.toThrow();
+  });
+
+  it('does NOT throw for "get_bridge_limits"', () => {
+    expect(() => dispatch("get_bridge_limits")).not.toThrow();
   });
 
   // Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names

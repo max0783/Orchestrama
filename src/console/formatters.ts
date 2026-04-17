@@ -78,12 +78,26 @@ export function formatConfig(config: BridgeConfig): string {
   lines.push(`queueMaxSize: ${config.queueMaxSize}`);
   lines.push(`numParallel: ${config.numParallel}`);
   lines.push(`requestTimeoutMs: ${config.requestTimeoutMs}`);
+  lines.push(`maxContextFiles: ${config.maxContextFiles ?? 20}`);
+  lines.push(`maxFileTokens: ${config.maxFileTokens ?? 1024}`);
+  lines.push(`maxTotalContextTokens: ${config.maxTotalContextTokens ?? 4096}`);
   lines.push(`reductionLogPath: ${config.reductionLogPath}`);
   lines.push(`logLevel: ${config.logLevel}`);
   lines.push(`disableProgress: ${config.disableProgress}`);
 
   if (config.benchmarkOutputFile !== undefined) {
     lines.push(`benchmarkOutputFile: ${config.benchmarkOutputFile}`);
+  }
+
+  // Model fine-tuning options
+  const opts = config.modelOptions;
+  if (opts && Object.keys(opts).length > 0) {
+    lines.push(`modelOptions:`);
+    for (const [k, v] of Object.entries(opts)) {
+      lines.push(`  ${k}: ${v}`);
+    }
+  } else {
+    lines.push(`modelOptions: (model defaults)`);
   }
 
   return lines.join("\n");

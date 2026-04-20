@@ -1,0 +1,29 @@
+{
+  "name": "orchestrama",
+  "version": "0.1.0",
+  "description": "Orchestrama: MCP server that bridges AI orchestrators to local Ollama models",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "generate-config": "dist/cli/generate_config.js",
+    "bridge-console": "dist/console/index.js",
+    "bridge-advisor": "dist/cli/advisor.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest --run",
+    "console": "node dist/console/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ignore": "^5.3.1",
+    "p-queue": "^8.0.1"
+  },
+  "devDependencies": {
+    "fast-check": "^3.22.0",
+    "vitest": "^2.0.0",
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0"
+  }
+}

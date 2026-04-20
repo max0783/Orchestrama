@@ -217,7 +217,7 @@ export class SetupTool {
     if (client === "codex") {
       const escapedPath = serverPath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       const lines = [
-        `[mcp_servers.ollama-mcp-bridge]`,
+        `[mcp_servers.orchestrama]`,
         `command = "node"`,
         `args = ["${escapedPath}"]`,
       ];
@@ -239,7 +239,7 @@ export class SetupTool {
 
     const mcpConfig = {
       mcpServers: {
-        "ollama-mcp-bridge": serverConfig,
+        orchestrama: serverConfig,
       },
     };
 

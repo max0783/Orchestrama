@@ -35,8 +35,8 @@ export type MenuAction =
  */
 export function renderMenu(): string {
   return [
-    "ollama-mcp-bridge Console",
-    "─────────────────────────",
+    "Orchestrama Console",
+    "───────────────────",
     "1. List Models",
     "2. Ping Model",
     "3. Set Default Model",

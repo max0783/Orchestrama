@@ -1,8 +1,8 @@
-# Plan: ollama-mcp-bridge
+# Plan: Orchestrama
 
 ## Goals
 
-This software bridges AI orchestrators (Kiro, Claude Desktop, Cursor) with a local Ollama instance via the Model Context Protocol (MCP). Its purpose is to enable AI assistants to leverage local LLMs for context-aware tasks while maintaining control over resource usage.
+Orchestrama bridges AI orchestrators (Kiro, Claude Desktop, Cursor) with a local Ollama instance via the Model Context Protocol (MCP). Its purpose is to enable AI assistants to leverage local LLMs for context-aware tasks while maintaining control over resource usage.
 
 ### Core Objectives
 

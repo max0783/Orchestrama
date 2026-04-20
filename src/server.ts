@@ -1,5 +1,5 @@
 /**
- * MCP server entry point for ollama-mcp-bridge.
+ * MCP server entry point for Orchestrama.
  *
  * Bootstraps the MCP server with stdio transport, registers all bridge tools,
  * loads configuration, and optionally pre-loads the default model on start.
@@ -83,7 +83,7 @@ async function main(): Promise<void> {
 
   // 3. Create MCP Server instance
   const server = new Server(
-    { name: "ollama-mcp-bridge", version: "0.1.0" },
+    { name: "orchestrama", version: "0.1.0" },
     { capabilities: { tools: {} } }
   );
 
@@ -163,23 +163,23 @@ async function main(): Promise<void> {
 
   // 6. Log startup message to stderr (Req 6.1, 6.2)
   process.stderr.write(
-    `ollama-mcp-bridge started. Default model: ${config.defaultModel}. Ollama URL: ${config.ollamaBaseUrl}\n`
+    `[orchestrama] Started. Default model: ${config.defaultModel}. Ollama URL: ${config.ollamaBaseUrl}\n`
   );
 
   // 7. Optionally pre-load the default model (Req 13.5)
   if (config.keepAliveOnStart) {
     process.stderr.write(
-      `[ollama-mcp-bridge] BRIDGE_KEEPALIVE_ON_START=true — pinging default model: ${config.defaultModel}\n`
+      `[orchestrama] BRIDGE_KEEPALIVE_ON_START=true — pinging default model: ${config.defaultModel}\n`
     );
     try {
       const pingResult = await ollamaClient.ping(config.defaultModel);
       process.stderr.write(
-        `[ollama-mcp-bridge] Model ${config.defaultModel} pre-loaded (${pingResult.loaded ? "warm" : "cold"}, ${pingResult.responseTimeMs}ms)\n`
+        `[orchestrama] Model ${config.defaultModel} pre-loaded (${pingResult.loaded ? "warm" : "cold"}, ${pingResult.responseTimeMs}ms)\n`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(
-        `[ollama-mcp-bridge] WARNING: Failed to pre-load model ${config.defaultModel}: ${msg}\n`
+        `[orchestrama] WARNING: Failed to pre-load model ${config.defaultModel}: ${msg}\n`
       );
       // Non-fatal — continue starting the server
     }
@@ -192,7 +192,7 @@ async function main(): Promise<void> {
 
 main().catch((err) => {
   process.stderr.write(
-    `[ollama-mcp-bridge] Fatal error: ${err instanceof Error ? err.message : String(err)}\n`
+    `[orchestrama] Fatal error: ${err instanceof Error ? err.message : String(err)}\n`
   );
   process.exit(1);
 });

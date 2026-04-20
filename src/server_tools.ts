@@ -1,5 +1,5 @@
 /**
- * MCP tool definitions for the ollama-mcp-bridge server.
+ * MCP tool definitions for the Orchestrama server.
  *
  * Extracted to a separate module so that tests can import the tool list
  * without triggering the side-effectful `main()` call in server.ts.

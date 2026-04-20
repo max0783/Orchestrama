@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for ollama-mcp-bridge.
+ * Shared type definitions for Orchestrama.
  */
 
 /** Maps task-type keywords/patterns to specific Ollama model names. */

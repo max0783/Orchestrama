@@ -27,7 +27,7 @@ describe("renderMenu()", () => {
 
   it("contains the header", () => {
     const menu = renderMenu();
-    expect(menu).toContain("ollama-mcp-bridge Console");
+    expect(menu).toContain("Orchestrama Console");
   });
 
   it("returns a non-empty string", () => {

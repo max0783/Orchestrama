@@ -20,7 +20,7 @@ Connect your AI orchestrator to a local [Ollama](https://ollama.com) instance vi
 
 ```bash
 git clone <repo-url>
-cd ollama-mcp-bridge
+cd orchestrama
 npm install
 npm run build
 ```
@@ -115,8 +115,8 @@ npm run console
 ### Menu Options
 
 ```
-ollama-mcp-bridge Console
-─────────────────────────
+Orchestrama Console
+───────────────────
 1. List Models
 2. Ping Model
 3. Set Default Model

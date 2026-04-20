@@ -117,7 +117,7 @@ const nonEmptyString = fc
 
 describe("Property 12: setup_bridge config snippet validity", () => {
   it(
-    "returns client-appropriate config snippet and always contains 'ollama-mcp-bridge'",
+    "returns client-appropriate config snippet and always contains 'orchestrama'",
     async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -129,12 +129,12 @@ describe("Property 12: setup_bridge config snippet validity", () => {
             const setupTool = new SetupTool({ registry, ollamaClient, config });
 
             const result = await setupTool.generate(client);
-            expect(result.configSnippet).toContain("ollama-mcp-bridge");
+            expect(result.configSnippet).toContain("orchestrama");
             expect(result.configJson).toBe(result.configSnippet);
 
             if (client === "codex") {
               expect(result.configFormat).toBe("toml");
-              expect(result.configSnippet).toContain("[mcp_servers.ollama-mcp-bridge]");
+              expect(result.configSnippet).toContain("[mcp_servers.orchestrama]");
               expect(result.configSnippet).toContain("args = [");
             } else {
               expect(result.configFormat).toBe("json");
@@ -143,7 +143,7 @@ describe("Property 12: setup_bridge config snippet validity", () => {
                 parsed = JSON.parse(result.configSnippet);
               }).not.toThrow();
               const jsonStr = JSON.stringify(parsed);
-              expect(jsonStr).toContain("ollama-mcp-bridge");
+              expect(jsonStr).toContain("orchestrama");
             }
           }
         ),

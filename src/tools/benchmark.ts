@@ -423,7 +423,7 @@ export function createBenchmarkHandler(
         await fs.writeFile(benchmarkOutputFile, JSON.stringify(report, null, 2), "utf-8");
       } catch (err) {
         process.stderr.write(
-          `[ollama-mcp-bridge] Failed to write benchmark output to ${benchmarkOutputFile}: ${err instanceof Error ? err.message : String(err)}\n`
+          `[orchestrama] Failed to write benchmark output to ${benchmarkOutputFile}: ${err instanceof Error ? err.message : String(err)}\n`
         );
       }
     }

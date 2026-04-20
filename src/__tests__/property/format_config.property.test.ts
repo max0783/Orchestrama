@@ -17,6 +17,7 @@ const bridgeConfigArb = fc.record({
   keepAlive: fc.string({ minLength: 1 }),
   keepAliveOnStart: fc.boolean(),
   allowedDirs: fc.array(fc.string({ minLength: 1 })),
+  allowedDirsExplicit: fc.boolean(),
   systemPrompt: fc.string(),
   capabilityMap: fc.dictionary(
     fc.string({ minLength: 1 }),

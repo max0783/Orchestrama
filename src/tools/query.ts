@@ -293,6 +293,63 @@ export function createQueryHandler(
     const tokenEstimate = estimateTokens(fullPayload + systemPrompt);
 
     // -----------------------------------------------------------------------
+    // 5a. Token budget guard — refuse before queuing if payload is too large
+    //     to be useful even with chunking.
+    //
+    //     Chunking handles payloads larger than the context window by splitting
+    //     and reducing, but if the prompt alone (without any file content)
+    //     already exceeds the context window there is nothing chunking can do —
+    //     the model will never see the full question. Refuse early with a clear
+    //     message so the caller can rethink rather than getting a garbled reply.
+    //
+    //     When config.autoRetryOnOverflow is true we instead halve the context
+    //     window and retry (up to 3 halvings) before giving up.
+    // -----------------------------------------------------------------------
+    const promptOnlyTokens = estimateTokens(prompt + systemPrompt);
+
+    // Determine effective context window, potentially reduced by auto-retry
+    let effectiveContextWindow = config.contextWindow;
+    const MAX_HALVINGS = 3;
+
+    if (promptOnlyTokens > effectiveContextWindow) {
+      if (config.autoRetryOnOverflow) {
+        let halvings = 0;
+        while (promptOnlyTokens > effectiveContextWindow && halvings < MAX_HALVINGS) {
+          effectiveContextWindow = Math.floor(effectiveContextWindow / 2);
+          halvings++;
+          process.stderr.write(
+            `[ollama-mcp-bridge] auto_retry_overflow: prompt ~${promptOnlyTokens} tokens > context ${effectiveContextWindow * 2}, ` +
+              `retrying with context=${effectiveContextWindow} (halving ${halvings}/${MAX_HALVINGS})\n`
+          );
+        }
+        if (promptOnlyTokens > effectiveContextWindow) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            `token_budget_exceeded: the prompt alone is ~${promptOnlyTokens} tokens which still exceeds ` +
+              `the minimum context window of ${effectiveContextWindow} after ${MAX_HALVINGS} halvings. ` +
+              `Shorten the prompt or increase OLLAMA_CONTEXT_WINDOW.`
+          );
+        }
+      } else {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          `token_budget_exceeded: the prompt alone is ~${promptOnlyTokens} tokens which exceeds ` +
+            `the context window of ${effectiveContextWindow}. ` +
+            `Shorten the prompt, increase OLLAMA_CONTEXT_WINDOW / Edit Bridge Limits in the console, ` +
+            `or enable auto-retry on overflow (BRIDGE_AUTO_RETRY_OVERFLOW=true).`
+        );
+      }
+    }
+
+    // Warn (stderr only) when the full payload is large but chunking will handle it
+    if (tokenEstimate > effectiveContextWindow) {
+      process.stderr.write(
+        `[ollama-mcp-bridge] token_budget: payload ~${tokenEstimate} tokens exceeds context window ` +
+          `${effectiveContextWindow} — Map-Reduce chunking will be used\n`
+      );
+    }
+
+    // -----------------------------------------------------------------------
     // 6. Log invocation details to stderr (Req 7.1)
     // -----------------------------------------------------------------------
     process.stderr.write(
@@ -329,7 +386,7 @@ export function createQueryHandler(
           fullPayload,
           systemPrompt,
             {
-              contextWindow: config.contextWindow,
+              contextWindow: effectiveContextWindow,
               systemPromptTokens,
               model,
               modelOptions: mergedOptions,

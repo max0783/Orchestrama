@@ -32,6 +32,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     keepAlive: "10m",
     keepAliveOnStart: false,
     allowedDirs: [process.cwd()],
+    allowedDirsExplicit: false,
     systemPrompt: "",
     capabilityMap: {},
     fallbackModels: [],
@@ -55,6 +56,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     listModels: vi.fn(async () => []),
     ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
     showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+    listRunningModels: vi.fn(async () => []),
   };
 
   const fileReader = {

@@ -23,6 +23,7 @@ function makeConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     keepAlive: "10m",
     keepAliveOnStart: false,
     allowedDirs: ["/tmp"],
+    allowedDirsExplicit: false,
     systemPrompt: "",
     capabilityMap: {},
     fallbackModels: [],

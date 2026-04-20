@@ -22,6 +22,12 @@ export interface BridgeConfig {
   keepAliveOnStart: boolean;
   /** BRIDGE_ALLOWED_DIRS — comma-separated; default [process.cwd()] */
   allowedDirs: string[];
+  /**
+   * True when BRIDGE_ALLOWED_DIRS was explicitly set in the environment.
+   * False when defaulting to [process.cwd()].
+   * Used by declare_working_dirs to determine security policy.
+   */
+  allowedDirsExplicit: boolean;
   /** BRIDGE_SYSTEM_PROMPT — or built-in default */
   systemPrompt: string;
   /** BRIDGE_CAPABILITY_MAP — JSON string parsed to map */
@@ -52,6 +58,17 @@ export interface BridgeConfig {
   patternsFilePath?: string;
   /** OLLAMA_MODEL_OPTIONS — JSON object of fine-tuning options (temperature, top_p, etc.) */
   modelOptions?: ModelOptions;
+  /**
+   * BRIDGE_AUTO_RETRY_OVERFLOW — when true, automatically retry a request
+   * with a halved context window if the payload exceeds the current window,
+   * rather than returning an error immediately.
+   */
+  autoRetryOnOverflow?: boolean;
+  /**
+   * OLLAMA_FLASH_ATTENTION — when true, sets OLLAMA_FLASH_ATTENTION=1 in .env.
+   * Takes effect only after Ollama is restarted (Ollama reads this at startup).
+   */
+  flashAttention?: boolean;
 }
 
 /** A named, reusable usage pattern that maps an intent to a system prompt and model preference. */

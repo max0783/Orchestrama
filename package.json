@@ -6,14 +6,13 @@
   "main": "dist/server.js",
   "bin": {
     "generate-config": "dist/cli/generate_config.js",
-    "bridge-setup": "dist/cli/setup.js",
-    "bridge-console": "dist/console/index.js"
+    "bridge-console": "dist/console/index.js",
+    "bridge-advisor": "dist/cli/advisor.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest --run",
-    "setup": "node dist/cli/setup.js",
     "console": "node dist/console/index.js"
   },
   "dependencies": {

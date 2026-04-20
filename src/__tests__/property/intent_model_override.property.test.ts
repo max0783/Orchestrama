@@ -31,6 +31,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     keepAlive: "10m",
     keepAliveOnStart: false,
     allowedDirs: [process.cwd()],
+    allowedDirsExplicit: false,
     systemPrompt: "",
     capabilityMap: {},
     fallbackModels: [],
@@ -59,6 +60,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
       modelInfoRaw: {},
       parsedParameters: {},
     })),
+    listRunningModels: vi.fn(async () => []),
   };
 
   const fileReader = {
@@ -164,6 +166,7 @@ describe("Property 3: Explicit model overrides pattern model preference", () => 
                   modelInfoRaw: {},
                   parsedParameters: {},
                 })),
+                listRunningModels: vi.fn(async () => []),
               },
               chunker: new Chunker(mockGenerate),
               intentDispatcher: mockIntentDispatcher,
@@ -238,6 +241,7 @@ describe("Property 3: Explicit model overrides pattern model preference", () => 
                   modelInfoRaw: {},
                   parsedParameters: {},
                 })),
+                listRunningModels: vi.fn(async () => []),
               },
               chunker: new Chunker(mockGenerate),
               intentDispatcher: mockIntentDispatcher,

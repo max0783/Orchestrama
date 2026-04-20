@@ -201,6 +201,123 @@ describe("OllamaClient", () => {
     });
   });
 
+  // --- listRunningModels() ---
+
+  describe("listRunningModels()", () => {
+    it("calls GET /api/ps and returns RunningModelInfo array", async () => {
+      const psResponse = {
+        models: [
+          {
+            name: "mistral:latest",
+            model: "mistral:latest",
+            size: 5137025024,
+            digest: "abc123",
+            details: {},
+            expires_at: "2024-01-01T00:00:00Z",
+            size_vram: 5137025024,
+          },
+        ],
+      };
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, JSON.stringify(psResponse)));
+
+      const result = await client.listRunningModels();
+
+      expect(fetchSpy).toHaveBeenCalledWith(`${BASE_URL}/api/ps`);
+      expect(result).toEqual([
+        { name: "mistral:latest", size: 5137025024, size_vram: 5137025024 },
+      ]);
+    });
+
+    it("extracts only name, size, and size_vram — ignores other fields", async () => {
+      const psResponse = {
+        models: [
+          {
+            name: "llama3:8b",
+            model: "llama3:8b",
+            size: 4000000000,
+            size_vram: 3000000000,
+            digest: "def456",
+            details: { family: "llama" },
+            expires_at: "2024-06-01T00:00:00Z",
+          },
+        ],
+      };
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, JSON.stringify(psResponse)));
+
+      const result = await client.listRunningModels();
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ name: "llama3:8b", size: 4000000000, size_vram: 3000000000 });
+      expect(result[0]).not.toHaveProperty("digest");
+      expect(result[0]).not.toHaveProperty("details");
+    });
+
+    it("returns empty array when response contains { models: [] }", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, JSON.stringify({ models: [] })));
+
+      const result = await client.listRunningModels();
+      expect(result).toEqual([]);
+    });
+
+    it("throws OllamaError with service_unavailable on ECONNREFUSED", async () => {
+      fetchSpy.mockRejectedValueOnce(new TypeError("fetch failed: ECONNREFUSED"));
+
+      await expect(client.listRunningModels()).rejects.toMatchObject({
+        code: "service_unavailable",
+        message: expect.stringContaining(BASE_URL),
+      });
+    });
+
+    it("throws OllamaError with service_unavailable on 'fetch failed'", async () => {
+      fetchSpy.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+      await expect(client.listRunningModels()).rejects.toMatchObject({
+        code: "service_unavailable",
+      });
+    });
+
+    it("throws OllamaError with service_unavailable on ENOTFOUND", async () => {
+      fetchSpy.mockRejectedValueOnce(new TypeError("getaddrinfo ENOTFOUND localhost"));
+
+      await expect(client.listRunningModels()).rejects.toMatchObject({
+        code: "service_unavailable",
+      });
+    });
+
+    it("throws OllamaError with service_unavailable on ECONNRESET", async () => {
+      fetchSpy.mockRejectedValueOnce(new TypeError("read ECONNRESET"));
+
+      await expect(client.listRunningModels()).rejects.toMatchObject({
+        code: "service_unavailable",
+      });
+    });
+
+    it("throws OllamaError with service_unavailable on non-OK HTTP response", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(503, "service unavailable"));
+
+      await expect(client.listRunningModels()).rejects.toMatchObject({
+        code: "service_unavailable",
+        message: "service unavailable",
+      });
+    });
+
+    it("returns multiple models when multiple are running", async () => {
+      const psResponse = {
+        models: [
+          { name: "mistral:latest", size: 5000000000, size_vram: 5000000000, model: "mistral:latest" },
+          { name: "llama3:8b", size: 4000000000, size_vram: 2000000000, model: "llama3:8b" },
+        ],
+      };
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, JSON.stringify(psResponse)));
+
+      const result = await client.listRunningModels();
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual({ name: "mistral:latest", size: 5000000000, size_vram: 5000000000 });
+      expect(result[1]).toEqual({ name: "llama3:8b", size: 4000000000, size_vram: 2000000000 });
+    });
+  });
+
   // --- ping() ---
 
   describe("ping()", () => {

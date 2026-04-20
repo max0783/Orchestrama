@@ -11,11 +11,18 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { FileReader } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
 
 let tmpDir: string;
+let registry: SessionRegistry;
+let pathValidator: PathValidator;
+const SESSION_ID = "test";
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "binary-exclusion-test-"));
+  registry = new SessionRegistry();
+  pathValidator = new PathValidator([tmpDir], registry);
 });
 
 afterEach(async () => {
@@ -37,7 +44,7 @@ describe("Property 18: Binary file exclusion", () => {
           const content = Buffer.from(`${prefix}\0${suffix}`);
           await fs.writeFile(filePath, content);
 
-          const reader = new FileReader([tmpDir]);
+          const reader = new FileReader(pathValidator, SESSION_ID);
           const results = await reader.readContextFiles([filePath]);
 
           expect(results).toHaveLength(1);
@@ -91,7 +98,7 @@ describe("Property 18: Binary file exclusion", () => {
           }
 
           // No .bridgeignore — only binary detection should exclude files
-          const reader = new FileReader([tmpDir]);
+          const reader = new FileReader(pathValidator, SESSION_ID);
           const results = await reader.readContextFiles(filePaths);
           const payload = reader.formatForPayload(results);
 

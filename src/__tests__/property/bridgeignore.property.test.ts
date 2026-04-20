@@ -11,11 +11,18 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { FileReader, loadIgnoreRules } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
 
 let tmpDir: string;
+let registry: SessionRegistry;
+let pathValidator: PathValidator;
+const SESSION_ID = "test";
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "bridgeignore-test-"));
+  registry = new SessionRegistry();
+  pathValidator = new PathValidator([tmpDir], registry);
 });
 
 afterEach(async () => {
@@ -51,7 +58,7 @@ describe("Property 17: .bridgeignore pattern exclusion", () => {
 
           // Load ignore rules and read files
           const ignoreRules = await loadIgnoreRules(tmpDir);
-          const reader = new FileReader([tmpDir]);
+          const reader = new FileReader(pathValidator, SESSION_ID);
           const allPaths = uniqueFilenames.map((n) => path.join(tmpDir, n));
           const results = await reader.readContextFiles(allPaths, ignoreRules);
 

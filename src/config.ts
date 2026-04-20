@@ -1,8 +1,58 @@
+import fs from "fs";
+import path from "path";
 import type { BridgeConfig, CapabilityMap, ModelOptions } from "./types.js";
 
 export const DEFAULT_MAX_CONTEXT_FILES = 20;
 export const DEFAULT_MAX_FILE_TOKENS = 1024;
 export const DEFAULT_MAX_TOTAL_CONTEXT_TOKENS = 4096;
+
+// ---------------------------------------------------------------------------
+// .env loader — runs once at module load time
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the .env file from the current working directory and injects any keys
+ * that are not already set in process.env. This means shell-level env vars
+ * always win over .env values, matching standard dotenv behaviour.
+ *
+ * Uses synchronous fs so it completes before any config is read.
+ * Silently skips if the file doesn't exist.
+ */
+function loadDotEnv(): void {
+  const envPath = path.join(process.cwd(), ".env");
+  let content: string;
+  try {
+    content = fs.readFileSync(envPath, "utf-8");
+  } catch {
+    return; // no .env file — that's fine
+  }
+
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+
+    const key = trimmed.slice(0, eqIdx).trim();
+    if (!key || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+
+    // Only set if not already in the environment
+    if (process.env[key] !== undefined) continue;
+
+    let value = trimmed.slice(eqIdx + 1);
+    // Strip surrounding quotes
+    if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+      value = value.slice(1, -1).replace(/\\(["\\])/g, "$1");
+    } else if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
+      value = value.slice(1, -1);
+    }
+
+    process.env[key] = value;
+  }
+}
+
+loadDotEnv();
 
 /**
  * Parses a numeric environment variable. Returns the parsed number, or null if
@@ -133,6 +183,7 @@ export function loadConfig(): BridgeConfig {
   );
 
   const allowedDirsRaw = env["BRIDGE_ALLOWED_DIRS"];
+  const allowedDirsExplicit = !!(allowedDirsRaw && allowedDirsRaw.trim() !== "");
   const allowedDirs =
     allowedDirsRaw && allowedDirsRaw.trim() !== ""
       ? allowedDirsRaw.split(",").map((d) => d.trim()).filter(Boolean)
@@ -160,6 +211,8 @@ export function loadConfig(): BridgeConfig {
   const benchmarkOutputFile = env["BENCHMARK_OUTPUT_FILE"];
   const patternsFilePath = env["BRIDGE_PATTERNS_FILE"];
   const modelOptions = parseModelOptions(env["OLLAMA_MODEL_OPTIONS"]);
+  const autoRetryOnOverflow = env["BRIDGE_AUTO_RETRY_OVERFLOW"] === "true";
+  const flashAttention = env["OLLAMA_FLASH_ATTENTION"] === "1";
 
   return {
     ollamaBaseUrl,
@@ -168,6 +221,7 @@ export function loadConfig(): BridgeConfig {
     keepAlive,
     keepAliveOnStart,
     allowedDirs,
+    allowedDirsExplicit,
     systemPrompt,
     capabilityMap,
     fallbackModels,
@@ -180,6 +234,8 @@ export function loadConfig(): BridgeConfig {
     reductionLogPath,
     logLevel,
     disableProgress,
+    autoRetryOnOverflow,
+    flashAttention,
     ...(benchmarkOutputFile !== undefined ? { benchmarkOutputFile } : {}),
     ...(patternsFilePath !== undefined ? { patternsFilePath } : {}),
     ...(modelOptions !== undefined ? { modelOptions } : {}),

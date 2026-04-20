@@ -32,6 +32,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     keepAlive: "10m",
     keepAliveOnStart: false,
     allowedDirs: [process.cwd()],
+    allowedDirsExplicit: false,
     systemPrompt: "",
     capabilityMap: {},
     fallbackModels: [],
@@ -55,6 +56,7 @@ function createMockDeps(overrides?: Partial<QueryHandlerDeps>): QueryHandlerDeps
     listModels: vi.fn(async () => []),
     ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
     showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+    listRunningModels: vi.fn(async () => []),
   };
 
   const fileReader = {
@@ -160,7 +162,8 @@ describe("Property 23: Invocation log fields", () => {
                 generate: mockGenerate,
                 listModels: vi.fn(async () => []),
                 ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
-    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+                showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+                listRunningModels: vi.fn(async () => []),
               },
               chunker: new Chunker(mockGenerate),
               fileReader,
@@ -237,7 +240,8 @@ describe("Property 23: Invocation log fields", () => {
                 generate: mockGenerate,
                 listModels: vi.fn(async () => []),
                 ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
-    showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+                showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+                listRunningModels: vi.fn(async () => []),
               },
               chunker: new Chunker(mockGenerate),
               capabilityRouter: new CapabilityRouter({}, modelName),

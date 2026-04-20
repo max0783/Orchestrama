@@ -100,6 +100,12 @@ export function formatConfig(config: BridgeConfig): string {
     lines.push(`modelOptions: (model defaults)`);
   }
 
+  lines.push(`autoRetryOnOverflow: ${config.autoRetryOnOverflow ?? false}`);
+  lines.push(
+    `flashAttention: ${config.flashAttention ?? false}` +
+      (config.flashAttention ? "" : "  (requires Ollama restart to take effect)")
+  );
+
   return lines.join("\n");
 }
 

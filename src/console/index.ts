@@ -26,16 +26,22 @@ import { createBenchmarkHandler } from "../tools/benchmark.js";
 import { createTestConfigHandler } from "../tools/test_config.js";
 import { createReductionStatsHandler } from "../tools/reduction_stats.js";
 import { createCapabilityMapHandler } from "../tools/capability_map.js";
-import { renderMenu, parseSelection } from "./menu.js";
+import type { MenuAction } from "./menu.js";
+import { selectOne, selectMany, SelectorCancelledError, setReadlineInterface } from "./selector.js";
+import type { SelectItem } from "./selector.js";
+import { writeEnvKeys } from "./dotenv_writer.js";
+import { runBenchmarkAdvisor } from "../advisor/index.js";
 import {
   formatModelList,
   formatPingResult,
   formatConfig,
   formatCapabilityMap,
   formatReductionStats,
-  formatCheckResults,
 } from "./formatters.js";
 import type { BridgeConfig, ModelOptions } from "../types.js";
+import type { BenchmarkReport } from "../tools/benchmark.js";
+import { SessionRegistry } from "../session/registry.js";
+import { manageDynamicDirs } from "./manage_dynamic_dirs.js";
 
 // ---------------------------------------------------------------------------
 // Context window auto-detection from Ollama model_info
@@ -84,6 +90,9 @@ function detectContextWindow(modelInfoRaw: Record<string, unknown>): number | un
 
 const BENCHMARK_LOG_PATH = "./ollama-benchmark.log";
 
+/** Last benchmark report produced in this session (or loaded from disk). */
+let lastBenchmarkReport: BenchmarkReport | null = null;
+
 async function appendBenchmarkLog(text: string): Promise<void> {
   try {
     await fs.appendFile(BENCHMARK_LOG_PATH, text + "\n\n", "utf-8");
@@ -94,6 +103,20 @@ async function appendBenchmarkLog(text: string): Promise<void> {
   }
 }
 
+/**
+ * Try to load a BenchmarkReport from the configured JSON output file.
+ * Returns null if the file doesn't exist or can't be parsed.
+ */
+async function loadSavedBenchmarkReport(outputFile?: string): Promise<BenchmarkReport | null> {
+  if (!outputFile) return null;
+  try {
+    const raw = await fs.readFile(outputFile, "utf-8");
+    return JSON.parse(raw) as BenchmarkReport;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Context window picker helper
 // ---------------------------------------------------------------------------
@@ -101,27 +124,26 @@ async function appendBenchmarkLog(text: string): Promise<void> {
 const CTX_PRESETS = [4096, 8192, 16384, 32768, 65536, 131072, 262144];
 
 async function pickContextWindow(
-  rl: readline.Interface,
+  _rl: readline.Interface,
   label: string
 ): Promise<number | undefined> {
-  console.log(`\n${label}`);
-  CTX_PRESETS.forEach((v, i) => console.log(`  ${i + 1}. ${(v / 1024).toFixed(0)}K  (${v})`));
-  console.log(`  ${CTX_PRESETS.length + 1}. Enter custom value`);
-  console.log(`  0. Skip (use model default)`);
+  // Task 6.2: Replace numbered prompt with selectOne
+  const ctxItems: SelectItem<number | undefined>[] = [
+    ...CTX_PRESETS.map((v) => ({
+      label: `${(v / 1024).toFixed(0)}K (${v})`,
+      value: v as number | undefined,
+    })),
+    { label: "Skip (use model default)", value: undefined },
+  ];
 
-  const sel = (await prompt(rl, "Choice: ")).trim();
-  if (sel === "0" || sel === "") return undefined;
-
-  const idx = parseInt(sel, 10) - 1;
-  if (idx >= 0 && idx < CTX_PRESETS.length) return CTX_PRESETS[idx];
-
-  if (idx === CTX_PRESETS.length) {
-    const raw = (await prompt(rl, "Enter context window (tokens): ")).trim();
-    const val = parseInt(raw, 10);
-    return !isNaN(val) && val > 0 ? val : undefined;
+  try {
+    return await selectOne(ctxItems, { title: `\n${label}` });
+  } catch (err) {
+    if (err instanceof SelectorCancelledError) {
+      return undefined;
+    }
+    throw err;
   }
-
-  return undefined;
 }
 
 /**
@@ -161,6 +183,8 @@ async function main(): Promise<void> {
   const capabilityRouter = new CapabilityRouter(config.capabilityMap, config.defaultModel);
   const chunker = new Chunker((req) => ollamaClient.generate(req));
   const requestQueue = new RequestQueue(config.numParallel, config.queueMaxSize);
+  const sessionRegistry = new SessionRegistry();
+  const SESSION_ID = "default";
 
   // Instantiate handler factories
   const listModelsHandler = createListModelsHandler(ollamaClient);
@@ -182,6 +206,9 @@ async function main(): Promise<void> {
     output: process.stdout,
   });
 
+  // Register readline interface with the selector so it can pause/resume it
+  setReadlineInterface(rl);
+
   // Handle SIGINT (Ctrl+C) and readline close as exit requests
   rl.on("close", () => {
     console.log("\nGoodbye!");
@@ -192,18 +219,49 @@ async function main(): Promise<void> {
     rl.close();
   });
 
+  // First-startup: offer to run advisor if no default model is configured
+  if (!process.env["OLLAMA_DEFAULT_MODEL"]) {
+    console.log("\nNo default model configured.");
+    const runAdvisor = (await prompt(rl, "Run Benchmark Advisor now to pick a model? (y/N): ")).trim().toLowerCase();
+    if (runAdvisor === "y" || runAdvisor === "yes") {
+      await runBenchmarkAdvisor({ ollamaClient, config, rl, benchmarkOutputFile: config.benchmarkOutputFile });
+    }
+  }
+
+  // Build menu items for selectOne (Task 6.1)
+  const menuItems: SelectItem<MenuAction>[] = [
+    { label: "List Models",                    value: "list_models" },
+    { label: "Ping Model",                     value: "ping_model" },
+    { label: "Set Default Model",              value: "set_default_model" },
+    { label: "Run Benchmark",                  value: "run_benchmark" },
+    { label: "View Configuration",             value: "view_config" },
+    { label: "View Capability Map",            value: "view_capability_map" },
+    { label: "View Reduction Stats",           value: "view_reduction_stats" },
+    { label: "Test Configuration",             value: "test_config" },
+    { label: "Test Configuration (dry run)",   value: "test_config_dry" },
+    { label: "Edit Bridge Limits",             value: "edit_bridge_limits" },
+    { label: "Edit Model Options",             value: "edit_model_options" },
+    { label: "Manage Dynamic Allowed Directories", value: "manage_dynamic_dirs" },
+    { label: "Run Benchmark Advisor",          value: "run_benchmark_advisor" },
+    { label: "Exit",                           value: "exit" },
+  ];
+
   // ---------------------------------------------------------------------------
   // Main menu loop
   // ---------------------------------------------------------------------------
 
   while (true) {
-    console.log("\n" + renderMenu());
-    const input = (await prompt(rl, "\nSelect an option: ")).trim();
-    const action = parseSelection(input);
+    console.log("\nollama-mcp-bridge Console");
 
-    if (action === null) {
-      console.log("Invalid selection, please try again.");
-      continue;
+    let action: MenuAction;
+    try {
+      action = await selectOne(menuItems, { title: "Select an option:" });
+    } catch (err) {
+      if (err instanceof SelectorCancelledError) {
+        // Escape: treat as no-op and re-render the menu
+        continue;
+      }
+      throw err;
     }
 
     if (action === "exit") {
@@ -234,15 +292,163 @@ async function main(): Promise<void> {
 
         // ------------------------------------------------------------------
         case "set_default_model": {
+          // --- Step 1: resolve a model name ---
+          // Try to get benchmark results: in-session first, then from disk.
+          const benchReport =
+            lastBenchmarkReport ??
+            (await loadSavedBenchmarkReport(config.benchmarkOutputFile));
+
           let modelName = "";
-          while (true) {
-            modelName = (await prompt(rl, "New default model name: ")).trim();
-            if (modelName === "") {
-              console.log("Model name cannot be empty.");
-            } else {
-              break;
+
+          if (benchReport && benchReport.models.length > 0) {
+            // We have benchmark results — offer to pick from them.
+            const successfulModels = benchReport.models.filter(
+              (m) => m.status !== "ERROR"
+            );
+
+            type BenchPickAction = "pick_from_bench" | "type_name";
+            const sourceItems: SelectItem<BenchPickAction>[] = [
+              {
+                label: `Pick from benchmark results (${successfulModels.length} model${successfulModels.length !== 1 ? "s" : ""})`,
+                value: "pick_from_bench",
+              },
+              { label: "Type a model name manually", value: "type_name" },
+            ];
+
+            let sourceChoice: BenchPickAction;
+            try {
+              sourceChoice = await selectOne(sourceItems, {
+                title: "\nHow would you like to choose the default model?",
+              });
+            } catch (err) {
+              if (err instanceof SelectorCancelledError) break;
+              throw err;
+            }
+
+            if (sourceChoice === "pick_from_bench") {
+              // Show the report so the user can compare
+              const showReport = (
+                await prompt(rl, "Show benchmark report before picking? (Y/n): ")
+              )
+                .trim()
+                .toLowerCase();
+              if (showReport !== "n" && showReport !== "no") {
+                // Print a compact summary table from the stored report
+                console.log("\n── Benchmark Results ──");
+                for (const m of benchReport.models) {
+                  if (m.status === "ERROR") {
+                    console.log(`  ${m.model}  ERROR: ${m.error ?? "unknown"}`);
+                    continue;
+                  }
+                  // Average throughput across tasks
+                  const avgThroughput =
+                    m.tasks.length > 0
+                      ? m.tasks.reduce((s, t) => s + t.metrics.throughput, 0) /
+                        m.tasks.length
+                      : 0;
+                  const avgLatency =
+                    m.tasks.length > 0
+                      ? m.tasks.reduce((s, t) => s + t.metrics.latency, 0) /
+                        m.tasks.length
+                      : 0;
+                  console.log(
+                    `  ${m.model.padEnd(40)}  avg ${avgThroughput.toFixed(1)} tok/s  avg ${avgLatency.toFixed(0)} ms`
+                  );
+                }
+                console.log("");
+              }
+
+              if (successfulModels.length === 0) {
+                console.log("No successful benchmark results to pick from.");
+                // Fall through to manual entry
+              } else {
+                const modelItems: SelectItem<string>[] = successfulModels.map(
+                  (m) => {
+                    const avgThroughput =
+                      m.tasks.length > 0
+                        ? m.tasks.reduce((s, t) => s + t.metrics.throughput, 0) /
+                          m.tasks.length
+                        : 0;
+                    return {
+                      label: `${m.model}  (${avgThroughput.toFixed(1)} tok/s avg)`,
+                      value: m.model,
+                    };
+                  }
+                );
+
+                try {
+                  modelName = await selectOne(modelItems, {
+                    title: "\nSelect model to set as default:",
+                  });
+                } catch (err) {
+                  if (err instanceof SelectorCancelledError) break;
+                  throw err;
+                }
+              }
             }
           }
+
+          // Fall back to: pick from installed models or type manually
+          if (!modelName) {
+            // Try to get installed models for a picker
+            let installedModels: string[] = [];
+            try {
+              installedModels = await ollamaClient.listModels();
+            } catch {
+              installedModels = [];
+            }
+
+            type FallbackAction = "pick_installed" | "type_name";
+            const fallbackItems: SelectItem<FallbackAction>[] = [
+              ...(installedModels.length > 0
+                ? [
+                    {
+                      label: `Pick from installed models (${installedModels.length})`,
+                      value: "pick_installed" as FallbackAction,
+                    },
+                  ]
+                : []),
+              { label: "Type a model name", value: "type_name" as FallbackAction },
+            ];
+
+            let fallbackChoice: FallbackAction = "type_name";
+            if (fallbackItems.length > 1) {
+              try {
+                fallbackChoice = await selectOne(fallbackItems, {
+                  title: "\nNo benchmark results available. How would you like to choose?",
+                });
+              } catch (err) {
+                if (err instanceof SelectorCancelledError) break;
+                throw err;
+              }
+            }
+
+            if (fallbackChoice === "pick_installed" && installedModels.length > 0) {
+              const modelItems: SelectItem<string>[] = installedModels.map((m) => ({
+                label: m,
+                value: m,
+              }));
+              try {
+                modelName = await selectOne(modelItems, {
+                  title: "\nSelect model to set as default:",
+                });
+              } catch (err) {
+                if (err instanceof SelectorCancelledError) break;
+                throw err;
+              }
+            } else {
+              // Manual entry
+              while (true) {
+                modelName = (await prompt(rl, "Model name: ")).trim();
+                if (modelName !== "") break;
+                console.log("Model name cannot be empty.");
+              }
+            }
+          }
+
+          if (!modelName) break;
+
+          // --- Step 2: apply and persist ---
           setDefaultModel(config, modelName);
           console.log(`Default model set to: ${modelName}`);
 
@@ -266,6 +472,11 @@ async function main(): Promise<void> {
               // Non-fatal — keep existing context window
             }
           }
+          // Persist to .env
+          await writeEnvKeys({
+            OLLAMA_DEFAULT_MODEL: modelName,
+            OLLAMA_CONTEXT_WINDOW: String(config.contextWindow),
+          });
           break;
         }
 
@@ -291,17 +502,21 @@ async function main(): Promise<void> {
             console.log("No models available in Ollama.");
             break;
           } else {
-            // Show numbered list and let the user toggle models on/off
-            console.log("\nInstalled models (enter numbers to toggle, blank = use all):");
-            allModels.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
-            const toggleInput = (await prompt(rl, "Toggle off (e.g. 2,4) or press Enter to use all: ")).trim();
-            if (toggleInput) {
-              const disabled = new Set(
-                toggleInput.split(",").map((s) => parseInt(s.trim(), 10) - 1)
-              );
-              selectedModels = allModels.filter((_, i) => !disabled.has(i));
-            } else {
-              selectedModels = [...allModels];
+            // Task 6.3: Replace numbered toggle-off prompt with selectMany
+            const modelItems: SelectItem<string>[] = allModels.map((m) => ({
+              label: m,
+              value: m,
+              checked: true,
+            }));
+            try {
+              selectedModels = await selectMany(modelItems, { title: "\nSelect models to benchmark (Space to toggle, Enter to confirm):" });
+            } catch (err) {
+              if (err instanceof SelectorCancelledError) {
+                // Escape: use all models
+                selectedModels = [...allModels];
+              } else {
+                throw err;
+              }
             }
           }
 
@@ -341,6 +556,10 @@ async function main(): Promise<void> {
           const warmUpInput = (await prompt(rl, "Warm up models before benchmarking? (Y/n): ")).trim().toLowerCase();
           const warmUp = warmUpInput !== "n" && warmUpInput !== "no";
 
+          // 6. Auto-reduce context on OOM (default Y)
+          const oomRetryInput = (await prompt(rl, "Auto-reduce context on RAM overflow? (Y/n): ")).trim().toLowerCase();
+          const autoRetryOnOverflow = oomRetryInput !== "n" && oomRetryInput !== "no";
+
           // Run benchmark — warm-up is interleaved per model inside the handler
           process.stdout.write("Running benchmark\n");
           const progressInterval = setInterval(() => process.stdout.write("."), 500);
@@ -350,6 +569,7 @@ async function main(): Promise<void> {
             const result = await benchmarkHandler(args, {
               contextOverrides,
               warmUp,
+              autoRetryOnOverflow,
               onModelStart: (model, phase) => {
                 if (phase === "warmup") {
                   process.stdout.write(`\n  ♨ warming up ${model}...`);
@@ -360,12 +580,18 @@ async function main(): Promise<void> {
               onModelInfo: (_model, summary) => {
                 if (summary) process.stdout.write(`\n     ${summary}`);
               },
+              onOomRetry: (model, oldCtx, newCtx) => {
+                process.stdout.write(`\n  ⚠ OOM on ${model} (ctx=${oldCtx}) — retrying with ctx=${newCtx}...`);
+              },
             });
             clearInterval(progressInterval);
             process.stdout.write("\n");
 
             const reportText = result.content[0]?.text ?? "";
             console.log("\n" + reportText);
+
+            // Store for use by set_default_model
+            lastBenchmarkReport = result.report;
 
             // 7. Append to benchmark log
             await appendBenchmarkLog(reportText);
@@ -487,11 +713,58 @@ async function main(): Promise<void> {
             process.env["OLLAMA_CONTEXT_WINDOW"] = String(ctxWinVal);
           }
 
+          // Auto-retry on overflow toggle
+          {
+            const currentRetry = config.autoRetryOnOverflow ?? false;
+            const retryItems: SelectItem<boolean>[] = [
+              { label: `Enable  — retry with halved context on overflow (current: ${currentRetry ? "ON" : "OFF"})`, value: true },
+              { label: `Disable — return error immediately on overflow`, value: false },
+            ];
+            try {
+              const choice = await selectOne(retryItems, {
+                title: "\nAuto-retry on context overflow:",
+              });
+              config.autoRetryOnOverflow = choice;
+              process.env["BRIDGE_AUTO_RETRY_OVERFLOW"] = choice ? "true" : "false";
+            } catch (err) {
+              if (!(err instanceof SelectorCancelledError)) throw err;
+            }
+          }
+
+          // Flash Attention toggle
+          {
+            const currentFA = config.flashAttention ?? false;
+            const faItems: SelectItem<boolean>[] = [
+              { label: `Enable  OLLAMA_FLASH_ATTENTION=1 (current: ${currentFA ? "ON" : "OFF"})`, value: true },
+              { label: `Disable OLLAMA_FLASH_ATTENTION=0`, value: false },
+            ];
+            try {
+              const choice = await selectOne(faItems, {
+                title: "\nFlash Attention (written to .env — requires Ollama restart):",
+              });
+              config.flashAttention = choice;
+              process.env["OLLAMA_FLASH_ATTENTION"] = choice ? "1" : "0";
+            } catch (err) {
+              if (!(err instanceof SelectorCancelledError)) throw err;
+            }
+          }
+
           console.log("\nUpdated bridge limits:");
           console.log(`  maxContextFiles:       ${config.maxContextFiles ?? 20}`);
           console.log(`  maxFileTokens:         ${config.maxFileTokens ?? 1024}`);
           console.log(`  maxTotalContextTokens: ${config.maxTotalContextTokens ?? 4096}`);
           console.log(`  contextWindow:         ${config.contextWindow}`);
+          console.log(`  autoRetryOnOverflow:   ${config.autoRetryOnOverflow ?? false}`);
+          console.log(`  flashAttention:        ${config.flashAttention ?? false}${config.flashAttention ? "  ⚠ restart Ollama to apply" : ""}`);
+          // Task 6.6: Persist to .env after edit_bridge_limits confirmation
+          await writeEnvKeys({
+            BRIDGE_MAX_CONTEXT_FILES: String(config.maxContextFiles ?? 20),
+            BRIDGE_MAX_FILE_TOKENS: String(config.maxFileTokens ?? 1024),
+            BRIDGE_MAX_TOTAL_CONTEXT_TOKENS: String(config.maxTotalContextTokens ?? 4096),
+            OLLAMA_CONTEXT_WINDOW: String(config.contextWindow),
+            BRIDGE_AUTO_RETRY_OVERFLOW: String(config.autoRetryOnOverflow ?? false),
+            OLLAMA_FLASH_ATTENTION: (config.flashAttention ?? false) ? "1" : "0",
+          });
           break;
         }
 
@@ -511,24 +784,42 @@ async function main(): Promise<void> {
 
           const updated: ModelOptions = { ...cur };
 
+          // Task 6.4: Replace editNumericOption with selectOne-based approach
           async function editNumericOption(
             key: keyof ModelOptions,
             label: string,
             hint: string
           ): Promise<void> {
             const current = cur[key];
-            const raw = (await prompt(rl, `  ${label} [${current ?? "model default"}] ${hint}: `)).trim();
-            if (raw === "") return;
-            if (raw.toLowerCase() === "clear") {
+            const actionItems: SelectItem<"set" | "clear" | "keep">[] = [
+              { label: `Set value  (current: ${current ?? "model default"}) ${hint}`, value: "set" },
+              { label: "Clear (use model default)", value: "clear" },
+              { label: "Keep current", value: "keep" },
+            ];
+
+            let choice: "set" | "clear" | "keep";
+            try {
+              choice = await selectOne(actionItems, { title: `  ${label}:` });
+            } catch (err) {
+              if (err instanceof SelectorCancelledError) {
+                // Escape: keep current value
+                return;
+              }
+              throw err;
+            }
+
+            if (choice === "set") {
+              const raw = (await prompt(rl, `  Enter value for ${label}: `)).trim();
+              const val = parseFloat(raw);
+              if (!isNaN(val)) {
+                (updated as Record<string, unknown>)[key] = val;
+              } else {
+                console.log(`    Invalid value, skipped.`);
+              }
+            } else if (choice === "clear") {
               delete updated[key];
-              return;
             }
-            const val = parseFloat(raw);
-            if (!isNaN(val)) {
-              (updated as Record<string, unknown>)[key] = val;
-            } else {
-              console.log(`    Invalid value, skipped.`);
-            }
+            // "keep": leave unchanged
           }
 
           await editNumericOption("temperature",    "temperature",    "(0.0–2.0, lower = more deterministic)");
@@ -552,6 +843,32 @@ async function main(): Promise<void> {
             if (k in display) console.log(`  ${k}: ${display[k]}`);
           }
           if (Object.keys(display).length === 0) console.log("  (all cleared — using model defaults)");
+          // Task 6.7: Persist to .env after edit_model_options confirmation
+          await writeEnvKeys({
+            OLLAMA_MODEL_OPTIONS: JSON.stringify(config.modelOptions ?? {}),
+          });
+          break;
+        }
+
+        // ------------------------------------------------------------------
+        case "manage_dynamic_dirs": {
+          await manageDynamicDirs({
+            config,
+            registry: sessionRegistry,
+            sessionId: SESSION_ID,
+            rl,
+          });
+          break;
+        }
+
+        // ------------------------------------------------------------------
+        case "run_benchmark_advisor": {
+          await runBenchmarkAdvisor({
+            ollamaClient,
+            config,
+            rl,
+            benchmarkOutputFile: config.benchmarkOutputFile,
+          });
           break;
         }
       }

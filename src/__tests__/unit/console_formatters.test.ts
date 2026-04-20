@@ -92,6 +92,7 @@ const BASE_CONFIG: BridgeConfig = {
   keepAlive: "10m",
   keepAliveOnStart: false,
   allowedDirs: ["/home/user"],
+  allowedDirsExplicit: false,
   systemPrompt: "You are a helpful assistant.",
   capabilityMap: {},
   fallbackModels: [],

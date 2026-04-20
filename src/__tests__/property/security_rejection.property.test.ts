@@ -11,7 +11,11 @@ import * as fc from "fast-check";
 import path from "path";
 import os from "os";
 import { FileReader, isPathAllowed } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
 import type { FileReadResult } from "../../types.js";
+
+const SESSION_ID = "test";
 
 describe("Property 5: Security rejection for out-of-bounds paths", () => {
   it("formatForPayload includes SECURITY ERROR marker for out-of-bounds paths", () => {
@@ -22,7 +26,9 @@ describe("Property 5: Security rejection for out-of-bounds paths", () => {
           { minLength: 1, maxLength: 20 }
         ),
         (paths) => {
-          const reader = new FileReader(["/allowed/dir"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed/dir"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
 
           // Build FileReadResult objects with security errors (as produced by readContextFiles)
           const results: FileReadResult[] = paths.map((p) => ({
@@ -56,7 +62,9 @@ describe("Property 5: Security rejection for out-of-bounds paths", () => {
           (s) => !s.includes("[SECURITY ERROR") && !s.includes("### File:")
         ),
         (outPath, someContent) => {
-          const reader = new FileReader(["/allowed/dir"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed/dir"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
 
           const results: FileReadResult[] = [
             {

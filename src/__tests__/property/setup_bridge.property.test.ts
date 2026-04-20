@@ -47,6 +47,7 @@ function createMockConfig(): BridgeConfig {
     keepAlive: "10m",
     keepAliveOnStart: false,
     allowedDirs: [process.cwd()],
+    allowedDirsExplicit: false,
     systemPrompt: "You are a helpful assistant.",
     capabilityMap: {},
     fallbackModels: [],
@@ -90,6 +91,7 @@ function createMockOllamaClient(options?: {
       done: true,
     }),
     showModel: async (_model: string) => mockModelInfo,
+    listRunningModels: async () => [],
   };
 }
 

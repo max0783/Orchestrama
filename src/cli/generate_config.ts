@@ -4,11 +4,9 @@
  *
  * Generates MCP configuration JSON snippets for supported clients.
  * Usage:
- *   generate-config [--client <name>] [--env KEY=VALUE ...] [--test]
+ *   generate-config [--client <name>] [--env KEY=VALUE ...]
  *
- * Supported clients: claude-desktop, claude-code, kiro, cursor, generic
- *
- * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.8
+ * Supported clients: claude-desktop, claude-code, kiro, cursor, codex, generic
  */
 
 import { parseArgs } from "node:util";
@@ -32,13 +30,12 @@ const { values } = parseArgs({
   options: {
     client: { type: "string" },
     env: { type: "string", multiple: true },
-    test: { type: "boolean", default: false },
   },
   allowPositionals: false,
 });
 
 // ---------------------------------------------------------------------------
-// Build env overrides from --env KEY=VALUE pairs (Req 10.5)
+// Build env overrides from --env KEY=VALUE pairs
 // ---------------------------------------------------------------------------
 
 const envOverrides: Record<string, string> = {};
@@ -60,7 +57,7 @@ function getEnv(key: string, defaultValue: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Generate the MCP server snippet (Req 10.3, 10.6)
+// Generate the MCP server snippet
 // ---------------------------------------------------------------------------
 
 function generateJsonSnippet(): object {
@@ -102,7 +99,7 @@ function generateSnippet(): object {
 }
 
 // ---------------------------------------------------------------------------
-// OS-specific config file paths per client (Req 10.4)
+// OS-specific config file paths per client
 // ---------------------------------------------------------------------------
 
 function getConfigPath(client: string): string {
@@ -149,7 +146,7 @@ function getConfigPath(client: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Print snippet for a single client (Req 10.3, 10.4, 10.6, 10.7)
+// Print snippet for a single client
 // ---------------------------------------------------------------------------
 
 function printForClient(client: string): void {
@@ -187,7 +184,7 @@ function isSupportedClient(value: string): value is SupportedClient {
 const clientArg = values.client;
 
 if (clientArg !== undefined) {
-  // --client specified: validate and print for that client only (Req 10.2, 10.3)
+  // --client specified: validate and print for that client only
   if (!isSupportedClient(clientArg)) {
     process.stderr.write(
       `Error: Unsupported client "${clientArg}". Supported clients: ${SUPPORTED_CLIENTS.join(", ")}\n`
@@ -196,50 +193,8 @@ if (clientArg !== undefined) {
   }
   printForClient(clientArg);
 } else {
-  // No --client: print all clients sequentially (Req 10.7)
+  // No --client: print all clients sequentially
   for (const client of SUPPORTED_CLIENTS) {
     printForClient(client);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// --test flag: run test_config after generating the snippet (Req 10.8)
-// ---------------------------------------------------------------------------
-
-if (values.test) {
-  console.log("\n# Running test_config check...");
-  console.log("# (Importing bridge modules to run connectivity checks)\n");
-
-  // Apply --env overrides into process.env so loadConfig() picks them up
-  for (const [key, val] of Object.entries(envOverrides)) {
-    process.env[key] = val;
-  }
-
-  // Dynamically import the bridge modules to run test_config.
-  // We do this lazily so the CLI remains fast when --test is not passed.
-  const { loadConfig } = await import("../config.js");
-  const { OllamaClient } = await import("../ollama/client.js");
-  const { Chunker } = await import("../chunking/index.js");
-  const { RequestQueue } = await import("../queue/request_queue.js");
-  const { createTestConfigHandler } = await import("../tools/test_config.js");
-
-  const config = loadConfig();
-  const ollamaClient = new OllamaClient(config.ollamaBaseUrl, config.keepAlive);
-  const chunker = new Chunker(ollamaClient.generate.bind(ollamaClient));
-  const requestQueue = new RequestQueue(config.numParallel, config.queueMaxSize);
-
-  const testConfigHandler = createTestConfigHandler({
-    ollamaClient,
-    chunker,
-    requestQueue,
-    defaultModel: config.defaultModel,
-    contextWindow: config.contextWindow,
-  });
-
-  const result = await testConfigHandler({ dry_run: false });
-  for (const item of result.content) {
-    if (item.type === "text") {
-      console.log(item.text);
-    }
   }
 }

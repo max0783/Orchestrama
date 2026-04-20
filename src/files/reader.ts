@@ -12,6 +12,7 @@ const ignoreFactory: (options?: { ignorecase?: boolean }) => IgnoreInstance =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (ignoreModule as any).default ?? ignoreModule;
 import { type FileReadResult } from "../types.js";
+import type { IPathValidator } from "../security/path_validator.js";
 
 export type { IgnoreInstance };
 
@@ -44,6 +45,7 @@ const DEFAULT_IGNORE_PATTERNS = [
 
 /**
  * Check if a resolved path is under any of the allowed directories.
+ * @deprecated Use PathValidator.isAllowed instead. This function is kept for backward compatibility.
  */
 export function isPathAllowed(resolvedPath: string, allowedDirs: string[]): boolean {
   return allowedDirs.some((dir) => {
@@ -76,10 +78,12 @@ export async function loadIgnoreRules(cwd: string): Promise<IgnoreInstance> {
 }
 
 export class FileReader {
-  private allowedDirs: string[];
+  private pathValidator: IPathValidator;
+  private sessionId: string;
 
-  constructor(allowedDirs: string[]) {
-    this.allowedDirs = allowedDirs;
+  constructor(pathValidator: IPathValidator, sessionId: string = "default") {
+    this.pathValidator = pathValidator;
+    this.sessionId = sessionId;
   }
 
   /**
@@ -144,7 +148,7 @@ export class FileReader {
     }
 
     // Step 2: Security check
-    if (!isPathAllowed(resolvedPath, this.allowedDirs)) {
+    if (!this.pathValidator.isAllowed(resolvedPath, this.sessionId)) {
       process.stderr.write(
         `[ollama-mcp-bridge] WARNING: Security violation - path outside allowed directories: ${inputPath}\n`
       );

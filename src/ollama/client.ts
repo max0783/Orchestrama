@@ -5,10 +5,20 @@ export type OllamaErrorCode =
   | "model_not_found"
   | "local_resource_exhausted";
 
+/** Describes a model currently loaded in Ollama (from GET /api/ps). */
+export interface RunningModelInfo {
+  name: string;
+  /** Total bytes (model weights + KV cache). */
+  size: number;
+  /** Bytes resident in GPU VRAM. */
+  size_vram: number;
+}
+
 /** Interface for the Ollama HTTP client — use this in dependency injection so tests can pass plain objects. */
 export interface IOllamaClient {
   generate(req: GenerateRequest, options?: { signal?: AbortSignal }): Promise<GenerateResponse>;
   listModels(): Promise<string[]>;
+  listRunningModels(): Promise<RunningModelInfo[]>;
   ping(model: string): Promise<{ loaded: boolean; responseTimeMs: number }>;
   showModel(model: string): Promise<OllamaModelInfo>;
 }
@@ -136,6 +146,36 @@ export class OllamaClient {
 
     const data = (await response.json()) as { models: Array<{ name: string }> };
     return data.models.map((m) => m.name);
+  }
+
+  async listRunningModels(): Promise<RunningModelInfo[]> {
+    const url = `${this.baseUrl}/api/ps`;
+
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("fetch failed") ||
+        msg.includes("ENOTFOUND") ||
+        msg.includes("ECONNRESET")
+      ) {
+        throw new OllamaError(`Ollama not available at ${this.baseUrl}`, "service_unavailable");
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new OllamaError(text, "service_unavailable");
+    }
+
+    const data = (await response.json()) as {
+      models: Array<{ name: string; size: number; size_vram: number; [key: string]: unknown }>;
+    };
+    return data.models.map((m) => ({ name: m.name, size: m.size, size_vram: m.size_vram }));
   }
 
   async ping(model: string): Promise<{ loaded: boolean; responseTimeMs: number }> {

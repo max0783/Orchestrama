@@ -27,6 +27,8 @@ import { ReductionLogger } from "./logging/reduction_logger.js";
 import { ProgressNotifier } from "./notifications/progress.js";
 import { PatternRegistry } from "./patterns/registry.js";
 import { IntentDispatcher } from "./patterns/dispatcher.js";
+import { SessionRegistry } from "./session/registry.js";
+import { PathValidator } from "./security/path_validator.js";
 
 import { createQueryHandler } from "./tools/query.js";
 import { createPingHandler } from "./tools/ping.js";
@@ -35,6 +37,8 @@ import { createRegisterPatternHandler } from "./tools/register_pattern.js";
 import { createGetBridgeLimitsHandler } from "./tools/get_bridge_limits.js";
 import { createSetupBridgeHandler } from "./tools/setup_bridge.js";
 import { SetupTool } from "./tools/setup_bridge_tool.js";
+import { createRunCommandHandler } from "./tools/run_command.js";
+import { createDeclareWorkingDirsHandler } from "./tools/declare_working_dirs.js";
 import { TOOL_DEFINITIONS } from "./server_tools.js";
 
 // ---------------------------------------------------------------------------
@@ -47,7 +51,13 @@ async function main(): Promise<void> {
 
   // 2. Create module instances
   const ollamaClient = new OllamaClient(config.ollamaBaseUrl, config.keepAlive);
-  const fileReader = new FileReader(config.allowedDirs);
+  
+  // 2a. Create SessionRegistry and PathValidator
+  const sessionRegistry = new SessionRegistry();
+  const pathValidator = new PathValidator(config.allowedDirs, sessionRegistry);
+  const SESSION_ID = "default";
+  
+  const fileReader = new FileReader(pathValidator, SESSION_ID);
   const chunker = new Chunker(ollamaClient.generate.bind(ollamaClient));
   const capabilityRouter = new CapabilityRouter(config.capabilityMap, config.defaultModel);
   const systemPromptInjector = new SystemPromptInjector(config.systemPrompt);
@@ -110,8 +120,21 @@ async function main(): Promise<void> {
   const pingHandler = createPingHandler(ollamaClient, config.defaultModel);
   const listPatternsHandler = createListPatternsHandler(patternRegistry);
   const registerPatternHandler = createRegisterPatternHandler(patternRegistry);
-  const getBridgeLimitsHandler = createGetBridgeLimitsHandler(config);
+  const getBridgeLimitsHandler = createGetBridgeLimitsHandler(config, sessionRegistry, SESSION_ID);
   const setupBridgeHandler = createSetupBridgeHandler(setupTool);
+  const runCommandHandler = createRunCommandHandler({
+    config,
+    ollamaClient,
+    capabilityRouter,
+    requestQueue,
+    pathValidator,
+    sessionId: SESSION_ID,
+  });
+  const declareWorkingDirsHandler = createDeclareWorkingDirsHandler({
+    config,
+    registry: sessionRegistry,
+    sessionId: SESSION_ID,
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -129,6 +152,10 @@ async function main(): Promise<void> {
         return getBridgeLimitsHandler(args);
       case "setup_bridge":
         return setupBridgeHandler(args);
+      case "run_command":
+        return runCommandHandler(args);
+      case "declare_working_dirs":
+        return declareWorkingDirsHandler(args);
       default:
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }

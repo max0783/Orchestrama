@@ -4,16 +4,27 @@
   DEFAULT_MAX_TOTAL_CONTEXT_TOKENS,
 } from "../config.js";
 import type { BridgeConfig } from "../types.js";
+import type { ISessionRegistry } from "../session/registry.js";
 
-export function createGetBridgeLimitsHandler(config: BridgeConfig) {
+export function createGetBridgeLimitsHandler(
+  config: BridgeConfig,
+  registry: ISessionRegistry,
+  sessionId: string
+) {
   return async (_args: unknown) => {
+    const staticDirs = config.allowedDirs;
+    const dynamicDirs = registry.getDynamicDirs(sessionId);
+    const effectiveDirs = Array.from(new Set([...staticDirs, ...dynamicDirs]));
+
     const limits = {
       context_window: config.contextWindow,
       max_context_files: config.maxContextFiles ?? DEFAULT_MAX_CONTEXT_FILES,
       max_file_tokens: config.maxFileTokens ?? DEFAULT_MAX_FILE_TOKENS,
       max_total_context_tokens:
         config.maxTotalContextTokens ?? DEFAULT_MAX_TOTAL_CONTEXT_TOKENS,
-      allowed_dirs: config.allowedDirs,
+      static_dirs: staticDirs,
+      dynamic_dirs: dynamicDirs,
+      allowed_dirs: effectiveDirs, // Backward compatibility
     };
 
     const text = [

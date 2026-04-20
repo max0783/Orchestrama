@@ -9,7 +9,7 @@ import { renderMenu, parseSelection } from "../../console/menu.js";
 import type { MenuAction } from "../../console/menu.js";
 
 describe("renderMenu()", () => {
-  it("contains all 10 action labels", () => {
+  it("contains all action labels", () => {
     const menu = renderMenu();
     expect(menu).toContain("List Models");
     expect(menu).toContain("Ping Model");
@@ -20,6 +20,8 @@ describe("renderMenu()", () => {
     expect(menu).toContain("View Reduction Stats");
     expect(menu).toContain("Test Configuration");
     expect(menu).toContain("Test Configuration (dry run)");
+    expect(menu).toContain("Manage Dynamic Allowed Directories");
+    expect(menu).toContain("Run Benchmark Advisor");
     expect(menu).toContain("Exit");
   });
 
@@ -46,6 +48,8 @@ describe("parseSelection()", () => {
     ["9", "test_config_dry"],
     ["10", "edit_bridge_limits"],
     ["11", "edit_model_options"],
+    ["12", "manage_dynamic_dirs"],
+    ["13", "run_benchmark_advisor"],
     ["0", "exit"],
   ];
 
@@ -67,7 +71,7 @@ describe("parseSelection()", () => {
   });
 
   it("returns null for out-of-range numbers", () => {
-    expect(parseSelection("12")).toBeNull();
+    expect(parseSelection("14")).toBeNull();
     expect(parseSelection("-1")).toBeNull();
     expect(parseSelection("99")).toBeNull();
   });
@@ -80,6 +84,6 @@ describe("parseSelection()", () => {
 
   it("returns null for multi-character strings that are not valid", () => {
     expect(parseSelection("01")).toBeNull();
-    expect(parseSelection("12")).toBeNull();
+    expect(parseSelection("14")).toBeNull();
   });
 });

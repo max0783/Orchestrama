@@ -21,6 +21,7 @@ function createMockOllamaClient(generateFn: (req: GenerateRequest) => Promise<Ge
     listModels: vi.fn(async () => [] as string[]),
     ping: vi.fn(async () => ({ loaded: true, responseTimeMs: 10 })),
     showModel: vi.fn(async () => ({ parameters: "", details: {}, modelInfoRaw: {}, parsedParameters: {} })),
+    listRunningModels: vi.fn(async () => []),
   };
 }
 

@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { TOOL_DEFINITIONS } from "../../server_tools.js";
 
 describe("TOOL_DEFINITIONS", () => {
-  // 1. Exactly 6 tools
-  it("has exactly 6 entries", () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(6);
+  // 1. Exactly 8 tools
+  it("has exactly 8 entries", () => {
+    expect(TOOL_DEFINITIONS).toHaveLength(8);
   });
 
   // 2. Tool names are exactly the expected set
@@ -16,6 +16,8 @@ describe("TOOL_DEFINITIONS", () => {
       "list_patterns",
       "register_pattern",
       "get_bridge_limits",
+      "run_command",
+      "declare_working_dirs",
       "setup_bridge",
     ]);
   });
@@ -78,5 +80,35 @@ describe("TOOL_DEFINITIONS", () => {
     expect(props["run_checks"].type).toBe("boolean");
     expect(props["include_env"]).toBeDefined();
     expect(props["include_env"].type).toBe("boolean");
+  });
+
+  // 8. run_command inputSchema has prompt, command, expected_output as required fields
+  it("run_command inputSchema has prompt, command, expected_output as required fields", () => {
+    const tool = TOOL_DEFINITIONS.find((t) => t.name === "run_command")!;
+    expect(tool).toBeDefined();
+    const props = tool.inputSchema.properties as unknown as Record<string, { type: string }>;
+    expect(props["prompt"]).toBeDefined();
+    expect(props["command"]).toBeDefined();
+    expect(props["expected_output"]).toBeDefined();
+    const required = (tool.inputSchema as { required?: string[] }).required ?? [];
+    expect(required).toContain("prompt");
+    expect(required).toContain("command");
+    expect(required).toContain("expected_output");
+    // cwd and model are optional
+    expect(required).not.toContain("cwd");
+    expect(required).not.toContain("model");
+  });
+
+  // 9. declare_working_dirs inputSchema has paths as required array field
+  it("declare_working_dirs inputSchema has paths as required array field", () => {
+    const tool = TOOL_DEFINITIONS.find((t) => t.name === "declare_working_dirs")!;
+    expect(tool).toBeDefined();
+    const props = tool.inputSchema.properties as unknown as Record<string, { type: string; items?: { type: string } }>;
+    expect(props["paths"]).toBeDefined();
+    expect(props["paths"].type).toBe("array");
+    expect(props["paths"].items).toBeDefined();
+    expect(props["paths"].items?.type).toBe("string");
+    const required = (tool.inputSchema as { required?: string[] }).required ?? [];
+    expect(required).toContain("paths");
   });
 });

@@ -8,6 +8,10 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { FileReader } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
+
+const SESSION_ID = "test";
 import type { FileReadResult } from "../../types.js";
 
 describe("Property 4: File payload formatting", () => {
@@ -22,7 +26,9 @@ describe("Property 4: File payload formatting", () => {
           { minLength: 1, maxLength: 20 }
         ),
         (pairs) => {
-          const reader = new FileReader(["/allowed"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
           const results: FileReadResult[] = pairs.map(({ path, content }) => ({
             path,
             content,
@@ -52,7 +58,9 @@ describe("Property 4: File payload formatting", () => {
           { minLength: 1, maxLength: 10 }
         ),
         (pairs) => {
-          const reader = new FileReader(["/allowed"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
           const results: FileReadResult[] = pairs.map(({ path, content }) => ({
             path,
             content,

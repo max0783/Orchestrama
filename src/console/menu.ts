@@ -22,6 +22,8 @@ export type MenuAction =
   | "test_config_dry"
   | "edit_bridge_limits"
   | "edit_model_options"
+  | "manage_dynamic_dirs"
+  | "run_benchmark_advisor"
   | "exit";
 
 // ---------------------------------------------------------------------------
@@ -29,7 +31,7 @@ export type MenuAction =
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the full menu string with all 12 numbered entries.
+ * Returns the full menu string with all 13 numbered entries.
  */
 export function renderMenu(): string {
   return [
@@ -46,6 +48,8 @@ export function renderMenu(): string {
     "9. Test Configuration (dry run)",
     "10. Edit Bridge Limits",
     "11. Edit Model Options",
+    "12. Manage Dynamic Allowed Directories",
+    "13. Run Benchmark Advisor",
     "0. Exit",
   ].join("\n");
 }
@@ -66,6 +70,8 @@ const SELECTION_MAP: Record<string, MenuAction> = {
   "9": "test_config_dry",
   "10": "edit_bridge_limits",
   "11": "edit_model_options",
+  "12": "manage_dynamic_dirs",
+  "13": "run_benchmark_advisor",
   "0": "exit",
 };
 

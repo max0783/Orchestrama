@@ -11,6 +11,7 @@
  */
 
 import fs from "fs/promises";
+import { OllamaError } from "../ollama/client.js";
 import type { IOllamaClient, OllamaModelInfo } from "../ollama/client.js";
 import type { GenerateResponse } from "../types.js";
 
@@ -62,6 +63,8 @@ export interface ModelResult {
   tasks: TaskResult[];
   status?: "ERROR";
   error?: string;
+  /** Effective num_ctx used — may differ from the override if OOM retries reduced it */
+  effectiveNumCtx?: number;
 }
 
 export interface BenchmarkReport {
@@ -100,7 +103,7 @@ async function runTask(
   prompt: string,
   iterations: number,
   numCtx?: number
-): Promise<TaskMetricsWithStats | { status: "ERROR"; error: string }> {
+): Promise<TaskMetricsWithStats | { status: "ERROR"; error: string; oom: boolean }> {
   const latencies: number[] = [];
   const throughputs: number[] = [];
   const responseLengths: number[] = [];
@@ -117,9 +120,12 @@ async function runTask(
         ...(numCtx !== undefined ? { options: { num_ctx: numCtx } } : {}),
       });
     } catch (err) {
+      const oom =
+        err instanceof OllamaError && err.code === "local_resource_exhausted";
       return {
         status: "ERROR",
         error: err instanceof Error ? err.message : String(err),
+        oom,
       };
     }
 
@@ -171,7 +177,9 @@ function formatReport(report: BenchmarkReport): string {
     hour12: false,
   });
 
-  const flashStr = report.flashAttention ? "ON" : "OFF";
+  const flashStr = report.flashAttention
+    ? "ON  (env flag set — verify Ollama was restarted after enabling)"
+    : "OFF  (env flag not set)";
 
   const lines: string[] = [
     `Benchmark Report — ${humanDate}  (${report.generatedAt})`,
@@ -205,10 +213,15 @@ function formatReport(report: BenchmarkReport): string {
       const paramKeys = ["num_ctx", "temperature", "top_p", "top_k", "repeat_penalty", "seed", "num_predict"];
       for (const key of paramKeys) {
         if (key === "num_ctx") {
-          // Override wins over Modelfile value
+          // Override wins over Modelfile value; effectiveNumCtx wins over override (OOM reduction)
+          const effective = modelResult.effectiveNumCtx;
           const override = report.contextOverrides?.[modelResult.model];
-          if (override !== undefined) {
+          if (effective !== undefined && override !== undefined && effective !== override) {
+            configLines.push(`${"num_ctx".padEnd(14)} ${effective}  ← reduced from ${override} (OOM retry)`);
+          } else if (override !== undefined) {
             configLines.push(`${"num_ctx".padEnd(14)} ${override}  ← override`);
+          } else if (effective !== undefined) {
+            configLines.push(`${"num_ctx".padEnd(14)} ${effective}  ← OOM-reduced`);
           } else if (parsedParameters["num_ctx"] !== undefined) {
             configLines.push(`${"num_ctx".padEnd(14)} ${parsedParameters["num_ctx"]}`);
           }
@@ -254,6 +267,13 @@ export interface BenchmarkHandlerOptions {
   onModelStart?: (model: string, phase: "warmup" | "bench") => void;
   /** Called with the formatted ollama show summary just before tasks run */
   onModelInfo?: (model: string, summary: string) => void;
+  /**
+   * When true, automatically retry a model with halved num_ctx on OOM
+   * instead of recording it as an error. Up to 3 halvings are attempted.
+   */
+  autoRetryOnOverflow?: boolean;
+  /** Called when an OOM retry is about to happen, for progress display */
+  onOomRetry?: (model: string, oldCtx: number, newCtx: number) => void;
 }
 
 export function createBenchmarkHandler(
@@ -326,24 +346,49 @@ export function createBenchmarkHandler(
         modelInfo = undefined;
       }
 
+      // Run tasks with optional OOM auto-retry (halve num_ctx up to 3 times)
+      const MAX_OOM_HALVINGS = 3;
+      let effectiveNumCtx = numCtx;
+      let oomHalvings = 0;
       const taskResults: TaskResult[] = [];
       let modelFailed = false;
       let modelError = "";
 
-      for (const task of BENCHMARK_TASKS) {
-        const result = await runTask(ollamaClient, model, task.prompt, iterations, numCtx);
+      taskLoop: while (true) {
+        taskResults.length = 0;
+        modelFailed = false;
+        modelError = "";
 
-        if ("status" in result && result.status === "ERROR") {
-          // Record error and stop further tasks for this model (Req 8.10)
-          modelFailed = true;
-          modelError = result.error;
-          break;
+        for (const task of BENCHMARK_TASKS) {
+          const result = await runTask(ollamaClient, model, task.prompt, iterations, effectiveNumCtx);
+
+          if ("status" in result && result.status === "ERROR") {
+            if (result.oom && opts.autoRetryOnOverflow && oomHalvings < MAX_OOM_HALVINGS) {
+              // OOM — halve context and retry the whole model from scratch
+              const oldCtx = effectiveNumCtx ?? 0;
+              effectiveNumCtx = oldCtx > 0
+                ? Math.floor(oldCtx / 2)
+                : 2048; // fallback starting point if no ctx was set
+              oomHalvings++;
+              opts.onOomRetry?.(model, oldCtx, effectiveNumCtx);
+              continue taskLoop;
+            }
+            // Non-OOM error, or OOM with retries exhausted
+            modelFailed = true;
+            modelError = oomHalvings > 0
+              ? `OOM after ${oomHalvings} context reduction(s) (final ctx=${effectiveNumCtx}): ${result.error}`
+              : result.error;
+            break taskLoop;
+          }
+
+          taskResults.push({
+            taskName: task.name,
+            metrics: result as TaskMetricsWithStats,
+          });
         }
 
-        taskResults.push({
-          taskName: task.name,
-          metrics: result as TaskMetricsWithStats,
-        });
+        // All tasks completed successfully
+        break;
       }
 
       if (modelFailed) {
@@ -353,12 +398,14 @@ export function createBenchmarkHandler(
           tasks: [],
           status: "ERROR",
           error: modelError,
+          ...(effectiveNumCtx !== undefined ? { effectiveNumCtx } : {}),
         });
       } else {
         modelResults.push({
           model,
           modelInfo,
           tasks: taskResults,
+          ...(effectiveNumCtx !== undefined ? { effectiveNumCtx } : {}),
         });
       }
     }

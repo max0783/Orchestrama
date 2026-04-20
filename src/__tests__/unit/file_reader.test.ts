@@ -10,11 +10,18 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { FileReader, loadIgnoreRules, isPathAllowed } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
 
 let tmpDir: string;
+let registry: SessionRegistry;
+let pathValidator: PathValidator;
+const SESSION_ID = "test";
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "file-reader-unit-"));
+  registry = new SessionRegistry();
+  pathValidator = new PathValidator([tmpDir], registry);
 });
 
 afterEach(async () => {
@@ -73,7 +80,7 @@ describe("FileReader — directory recursion depth limit", () => {
     await fs.writeFile(path.join(d3, "file3.txt"), "depth3");
     await fs.writeFile(path.join(d4, "file4.txt"), "depth4");
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([d1]);
 
     const paths = results.map((r) => r.path);
@@ -97,7 +104,7 @@ describe("FileReader — directory recursion depth limit", () => {
     await fs.mkdir(d4, { recursive: true });
     await fs.writeFile(path.join(d4, "deep.txt"), "too deep");
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     // Start from d1 — d4 is at depth 3 from d1, so its contents (depth 4) are skipped
     const results = await reader.readContextFiles([d1]);
     const paths = results.map((r) => r.path);
@@ -192,7 +199,7 @@ describeSymlinks("FileReader — symlink traversal rejection", () => {
     await fs.symlink(outsideFile, symlinkPath);
 
     try {
-      const reader = new FileReader([tmpDir]);
+      const reader = new FileReader(pathValidator, SESSION_ID);
       const results = await reader.readContextFiles([symlinkPath]);
 
       expect(results).toHaveLength(1);
@@ -212,7 +219,7 @@ describeSymlinks("FileReader — symlink traversal rejection", () => {
     const symlinkPath = path.join(tmpDir, "link-to-real.txt");
     await fs.symlink(realFile, symlinkPath);
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([symlinkPath]);
 
     expect(results).toHaveLength(1);
@@ -230,7 +237,7 @@ describeSymlinks("FileReader — symlink traversal rejection", () => {
     await fs.symlink(outsideDir, symlinkDir);
 
     try {
-      const reader = new FileReader([tmpDir]);
+      const reader = new FileReader(pathValidator, SESSION_ID);
       const results = await reader.readContextFiles([symlinkDir]);
 
       // The symlink dir itself should be rejected
@@ -249,7 +256,7 @@ describeSymlinks("FileReader — symlink traversal rejection", () => {
 
 describe("FileReader — missing file handling", () => {
   it("returns file not found error for non-existent paths", async () => {
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([
       path.join(tmpDir, "does-not-exist.txt"),
     ]);
@@ -263,7 +270,7 @@ describe("FileReader — missing file handling", () => {
     const existingFile = path.join(tmpDir, "exists.txt");
     await fs.writeFile(existingFile, "hello");
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([
       path.join(tmpDir, "missing.txt"),
       existingFile,
@@ -287,7 +294,7 @@ describe("FileReader — binary file detection", () => {
     const binaryFile = path.join(tmpDir, "binary.dat");
     await fs.writeFile(binaryFile, Buffer.from("text\0binary"));
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([binaryFile]);
 
     expect(results).toHaveLength(1);
@@ -299,7 +306,7 @@ describe("FileReader — binary file detection", () => {
     const textFile = path.join(tmpDir, "text.txt");
     await fs.writeFile(textFile, "Hello, world! 🌍");
 
-    const reader = new FileReader([tmpDir]);
+    const reader = new FileReader(pathValidator, SESSION_ID);
     const results = await reader.readContextFiles([textFile]);
 
     expect(results).toHaveLength(1);

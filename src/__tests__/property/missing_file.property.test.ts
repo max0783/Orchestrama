@@ -8,7 +8,11 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { FileReader } from "../../files/reader.js";
+import { SessionRegistry } from "../../session/registry.js";
+import { PathValidator } from "../../security/path_validator.js";
 import type { FileReadResult } from "../../types.js";
+
+const SESSION_ID = "test";
 
 describe("Property 6: Missing file error marker", () => {
   it("formatForPayload includes [ERROR: file not found] for missing paths", () => {
@@ -19,7 +23,9 @@ describe("Property 6: Missing file error marker", () => {
           { minLength: 1, maxLength: 20 }
         ),
         (paths) => {
-          const reader = new FileReader(["/allowed"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
 
           const results: FileReadResult[] = paths.map((p) => ({
             path: p,
@@ -54,7 +60,9 @@ describe("Property 6: Missing file error marker", () => {
           { minLength: 1, maxLength: 10 }
         ),
         (existingPairs, missingPaths) => {
-          const reader = new FileReader(["/allowed"]);
+          const registry = new SessionRegistry();
+          const pathValidator = new PathValidator(["/allowed"], registry);
+          const reader = new FileReader(pathValidator, SESSION_ID);
 
           const existingResults: FileReadResult[] = existingPairs.map(({ path, content }) => ({
             path,

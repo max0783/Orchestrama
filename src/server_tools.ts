@@ -114,6 +114,80 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "run_command",
+    description:
+      "Execute a shell command, capture its output, and send it to the local Ollama model for interpretation. " +
+      "Provide a prompt (what you want to know), a command (what to run), and expected_output (what the output should contain). " +
+      "The bridge runs the command, feeds the output to the model, and returns a concise answer. " +
+      "\n\n" +
+      "Common repo-inspection examples (pipe or flag to limit output):\n" +
+      "- `rg \"TODO\" --type ts -l` — list TypeScript files containing TODO\n" +
+      "- `git log --oneline --max-count=20 -- src/` — last 20 commits touching src/\n" +
+      "- `git diff HEAD~1 --stat` — files changed in the last commit\n" +
+      "- `git blame -l src/config.ts` — line-by-line authorship\n" +
+      "- `gh pr list --limit 10` — recent pull requests\n" +
+      "- `git show HEAD:src/config.ts` — file content at HEAD\n" +
+      "\n" +
+      "Always use flags that limit output (`--max-count`, `--oneline`, `-l`, `--stat`) before the token budget is exceeded. " +
+      "The working directory defaults to the bridge's cwd; override with the optional cwd parameter. " +
+      "Refuses if the command output exceeds the token budget.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "What you want to know or do with the command output.",
+        },
+        command: {
+          type: "string",
+          description: "The shell command to execute.",
+        },
+        expected_output: {
+          type: "string",
+          description: "Description of what the command output should contain (used to frame the model's interpretation).",
+        },
+        cwd: {
+          type: "string",
+          description: "Working directory for the command. Must be within BRIDGE_ALLOWED_DIRS. Defaults to the bridge's cwd.",
+        },
+        model: {
+          type: "string",
+          description: "Override the model to use (optional).",
+        },
+      },
+      required: ["prompt", "command", "expected_output"],
+    },
+  },
+  {
+    name: "declare_working_dirs",
+    description:
+      "Declare additional working directories for this session at runtime. " +
+      "The AI client calls this tool once per session to register directories it needs to access. " +
+      "Declared directories are merged with the static BRIDGE_ALLOWED_DIRS configuration and remain active for the session lifetime. " +
+      "\n\n" +
+      "Security model:\n" +
+      "- When BRIDGE_ALLOWED_DIRS is NOT set (default): any existing directory can be declared.\n" +
+      "- When BRIDGE_ALLOWED_DIRS IS set: declared directories must be subdirectories of the configured static dirs. " +
+      "This ensures the operator's security boundary is always respected.\n" +
+      "\n" +
+      "Idempotent behavior:\n" +
+      "- Calling this tool multiple times merges paths without duplicates (union semantics).\n" +
+      "- Paths are normalized and resolved to absolute paths before storage.\n" +
+      "\n" +
+      "Returns accepted paths, rejected paths with reasons, and the effective directory list (static + dynamic).",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "Absolute directory paths to add to this session's allowed dirs.",
+        },
+      },
+      required: ["paths"],
+    },
+  },
+  {
     name: "setup_bridge",
     description:
       "Generate the MCP configuration snippet for any supported client (JSON for most clients, TOML for codex) AND output a usage prompt describing all available tools and patterns in a single call. " +

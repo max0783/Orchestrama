@@ -6,10 +6,9 @@
  * from BRIDGE_ALLOWED_DIRS to form the effective allowed directories.
  *
  * Security policy:
- * - When BRIDGE_ALLOWED_DIRS is explicitly set: Dynamic_Dirs must be
- *   subdirectories of Static_Dirs (operator's intent is respected).
- * - When BRIDGE_ALLOWED_DIRS is not set (defaulting to cwd): any existing
- *   directory can be declared (zero friction for common case).
+ * - Any existing directory can be declared at runtime.
+ * - Declared directories are session-scoped and become part of the effective
+ *   allowed directory set used by the MCP tools.
  *
  * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7
  */
@@ -56,33 +55,12 @@ function normalizeSeparators(p: string): string {
 }
 
 /**
- * Checks if a resolved path is equal to or a subdirectory of any static dir.
- * Platform-aware case sensitivity (Windows: case-insensitive, POSIX: case-sensitive).
- * Requirements: 2.1, 2.2
- */
-function isSubdirOfStaticDirs(resolvedPath: string, staticDirs: string[]): boolean {
-  const isWindows = process.platform === "win32";
-  const normalizedPath = isWindows ? resolvedPath.toLowerCase() : resolvedPath;
-
-  return staticDirs.some((dir) => {
-    const normalizedDir = isWindows ? dir.toLowerCase() : dir;
-    const dirWithSep = normalizedDir.endsWith(path.sep)
-      ? normalizedDir
-      : normalizedDir + path.sep;
-
-    return normalizedPath === normalizedDir || normalizedPath.startsWith(dirWithSep);
-  });
-}
-
-/**
  * Validates a single path candidate.
  * Returns { accepted: resolvedPath } or { rejected: { path, reason } }.
  * Requirements: 1.5, 2.3, 2.4, 2.5, 2.6
  */
 async function validatePath(
-  inputPath: string,
-  staticDirs: string[],
-  allowedDirsExplicit: boolean
+  inputPath: string
 ): Promise<{ accepted?: string; rejected?: RejectedPath }> {
   // Step 1: Normalize separators
   const normalized = normalizeSeparators(inputPath);
@@ -121,20 +99,6 @@ async function validatePath(
       },
     };
   }
-
-  // Step 4: Apply security policy
-  if (allowedDirsExplicit) {
-    // BRIDGE_ALLOWED_DIRS was explicitly set — enforce subset constraint
-    if (!isSubdirOfStaticDirs(resolvedPath, staticDirs)) {
-      return {
-        rejected: {
-          path: inputPath,
-          reason: `path is outside static allowed dirs: ${inputPath}`,
-        },
-      };
-    }
-  }
-  // Otherwise (defaulted to cwd): accept any existing directory
 
   return { accepted: resolvedPath };
 }
@@ -186,11 +150,7 @@ export function createDeclareWorkingDirsHandler(deps: DeclareWorkingDirsHandlerD
     // -----------------------------------------------------------------------
     // 2. Validate each path (parallel for efficiency)
     // -----------------------------------------------------------------------
-    const validationResults = await Promise.all(
-      paths.map((p) =>
-        validatePath(p, config.allowedDirs, config.allowedDirsExplicit)
-      )
-    );
+    const validationResults = await Promise.all(paths.map((p) => validatePath(p)));
 
     const accepted: string[] = [];
     const rejected: RejectedPath[] = [];

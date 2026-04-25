@@ -9,6 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 import { TOOL_DEFINITIONS } from "../../server_tools.js";
+import { PROGRAM_COMMAND_SPECS } from "../../tools/context_tools.js";
 
 const EXPECTED_TOOLS = [
   "query_local_model",
@@ -17,28 +18,30 @@ const EXPECTED_TOOLS = [
   "register_pattern",
   "get_bridge_limits",
   "run_command",
+  "rg_search",
+  "gh_command",
+  "get_content",
+  ...PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName),
   "declare_working_dirs",
   "setup_bridge",
 ];
 
-describe("Property 1: MCP server exposes exactly the two query tools", () => {
-  // Updated: declare_working_dirs added as 8th tool
-  it("TOOL_DEFINITIONS has exactly 8 entries", () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(8);
+describe("Property 1: MCP server exposes the expected tool list", () => {
+  it("TOOL_DEFINITIONS has exactly the expected number of entries", () => {
+    expect(TOOL_DEFINITIONS).toHaveLength(EXPECTED_TOOLS.length);
   });
 
-  // Feature: dual-console-separation, Property 1: MCP server exposes exactly the two query tools
+  // Feature: dual-console-separation, Property 1: MCP server exposes the expected tool list
   it('first tool is named "query_local_model"', () => {
     expect(TOOL_DEFINITIONS[0].name).toBe("query_local_model");
   });
 
-  // Feature: dual-console-separation, Property 1: MCP server exposes exactly the two query tools
+  // Feature: dual-console-separation, Property 1: MCP server exposes the expected tool list
   it('second tool is named "ping_model"', () => {
     expect(TOOL_DEFINITIONS[1].name).toBe("ping_model");
   });
 
-  // Updated: declare_working_dirs added as 8th tool
-  it("tool names are exactly the expected 8 tools and no others", () => {
+  it("tool names are exactly the expected tools and no others", () => {
     const names = TOOL_DEFINITIONS.map((t) => t.name);
     expect(names).toEqual(EXPECTED_TOOLS);
   });

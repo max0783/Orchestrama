@@ -7,6 +7,47 @@
  * Requirements: 1.1, 1.2, 1.4, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6
  */
 
+import { PROGRAM_COMMAND_SPECS } from "./tools/context_tools.js";
+
+function createProgramCommandToolDefinition(spec: (typeof PROGRAM_COMMAND_SPECS)[number]) {
+  const examples = spec.examples.map((example) => `\`${example}\``).join(" or ");
+  return {
+    name: spec.toolName,
+    description:
+      `Run a ${spec.displayName} command in an allowed working directory, then send the bounded output to the local model for interpretation. ` +
+      `Pass the arguments after \`${spec.executable}\` in \`command\`, for example ${examples}.`,
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: `What you want the model to answer using the ${spec.displayName} output.`,
+        },
+        command: {
+          type: "string",
+          description: `Arguments after \`${spec.executable}\`, e.g. ${examples}.`,
+        },
+        cwd: {
+          type: "string",
+          description: "Working directory. Must be within the effective allowed dirs.",
+        },
+        max_output_chars: {
+          type: "number",
+          description: "Maximum output characters sent to the model, from 1000 to 64000. Defaults to 12000.",
+        },
+        model: { type: "string", description: "Override the model to use (optional)." },
+        intent: { type: "string", description: "Optional intent pattern for the model response." },
+        system_prompt: { type: "string", description: "Optional system prompt override." },
+        options: {
+          type: "object",
+          description: "Optional Ollama model options; same shape as query_local_model options.",
+        },
+      },
+      required: ["prompt", "command"],
+    },
+  };
+}
+
 export const TOOL_DEFINITIONS = [
   {
     name: "query_local_model",
@@ -148,7 +189,7 @@ export const TOOL_DEFINITIONS = [
         },
         cwd: {
           type: "string",
-          description: "Working directory for the command. Must be within BRIDGE_ALLOWED_DIRS. Defaults to the bridge's cwd.",
+          description: "Working directory for the command. Must be within the effective allowed dirs, including directories declared with declare_working_dirs. Defaults to the bridge's cwd.",
         },
         model: {
           type: "string",
@@ -159,6 +200,121 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: "rg_search",
+    description:
+      "Search the current project with ripgrep (`rg`), then send the bounded search output to the local model for interpretation. " +
+      "Use this when the AI needs to find files, symbols, references, TODOs, errors, or relevant code context before answering. " +
+      "The `prompt` describes what the caller wants to learn from the matches; Orchestrama gathers the matches and asks the model to answer from that context.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "What you want the model to answer using the rg results.",
+        },
+        pattern: {
+          type: "string",
+          description: "Ripgrep search pattern.",
+        },
+        cwd: {
+          type: "string",
+          description: "Directory to search. Must be within the effective allowed dirs.",
+        },
+        globs: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional rg glob filters, e.g. ['*.ts', '!dist/**'].",
+        },
+        case_sensitive: {
+          type: "boolean",
+          description: "Whether the search is case-sensitive. Defaults to true.",
+        },
+        context_lines: {
+          type: "number",
+          description: "Number of surrounding lines to include per match, from 0 to 20. Defaults to 0.",
+        },
+        max_output_chars: {
+          type: "number",
+          description: "Maximum rg output characters to send to the model, from 1000 to 64000. Defaults to 12000.",
+        },
+        model: { type: "string", description: "Override the model to use (optional)." },
+        intent: { type: "string", description: "Optional intent pattern for the model response." },
+        system_prompt: { type: "string", description: "Optional system prompt override." },
+        options: {
+          type: "object",
+          description: "Optional Ollama model options; same shape as query_local_model options.",
+        },
+      },
+      required: ["prompt", "pattern"],
+    },
+  },
+  {
+    name: "gh_command",
+    description:
+      "Run a GitHub CLI (`gh`) command with structured arguments, then send the bounded command output to the local model for interpretation. " +
+      "Use this for PRs, issues, releases, workflow runs, repository metadata, and other GitHub context. " +
+      "The command is executed without a shell; pass only the arguments after `gh`.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "What you want the model to answer using the gh output.",
+        },
+        args: {
+          type: "array",
+          items: { type: "string" },
+          description: "Arguments after `gh`, e.g. ['pr', 'view', '123', '--comments'].",
+        },
+        cwd: {
+          type: "string",
+          description: "Working directory for gh. Must be within the effective allowed dirs.",
+        },
+        max_output_chars: {
+          type: "number",
+          description: "Maximum gh output characters to send to the model, from 1000 to 64000. Defaults to 12000.",
+        },
+        model: { type: "string", description: "Override the model to use (optional)." },
+        intent: { type: "string", description: "Optional intent pattern for the model response." },
+        system_prompt: { type: "string", description: "Optional system prompt override." },
+        options: {
+          type: "object",
+          description: "Optional Ollama model options; same shape as query_local_model options.",
+        },
+      },
+      required: ["prompt", "args"],
+    },
+  },
+  {
+    name: "get_content",
+    description:
+      "Read one or more files or directories from the effective allowed dirs and send their contents to the local model with the caller's prompt. " +
+      "Use this as a direct Get-Content style tool when exact file content is needed before answering.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        prompt: {
+          type: "string",
+          description: "What you want the model to answer using the file contents.",
+        },
+        paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "Files or directories to read as context.",
+        },
+        model: { type: "string", description: "Override the model to use (optional)." },
+        intent: { type: "string", description: "Optional intent pattern for the model response." },
+        system_prompt: { type: "string", description: "Optional system prompt override." },
+        options: {
+          type: "object",
+          description: "Optional Ollama model options; same shape as query_local_model options.",
+        },
+      },
+      required: ["prompt", "paths"],
+    },
+  },
+  ...PROGRAM_COMMAND_SPECS.map(createProgramCommandToolDefinition),
+  {
     name: "declare_working_dirs",
     description:
       "Declare additional working directories for this session at runtime. " +
@@ -166,9 +322,8 @@ export const TOOL_DEFINITIONS = [
       "Declared directories are merged with the static BRIDGE_ALLOWED_DIRS configuration and remain active for the session lifetime. " +
       "\n\n" +
       "Security model:\n" +
-      "- When BRIDGE_ALLOWED_DIRS is NOT set (default): any existing directory can be declared.\n" +
-      "- When BRIDGE_ALLOWED_DIRS IS set: declared directories must be subdirectories of the configured static dirs. " +
-      "This ensures the operator's security boundary is always respected.\n" +
+      "- Any existing directory can be declared at runtime.\n" +
+      "- Declared directories are session-scoped and become part of the effective allowed directory set.\n" +
       "\n" +
       "Idempotent behavior:\n" +
       "- Calling this tool multiple times merges paths without duplicates (union semantics).\n" +

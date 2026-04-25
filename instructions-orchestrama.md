@@ -11,6 +11,22 @@ Local Ollama inference bridge. Use for privacy-sensitive, repetitive, or large-p
 | `ping_model` | Verify model is warm before a latency-sensitive query |
 | `get_bridge_limits` | Check file/token limits before attaching context files |
 | `run_command` | Run a shell command and have the model interpret output |
+| `rg_search` | Search files with ripgrep and have the model interpret matches |
+| `gh_command` | Run GitHub CLI commands and have the model interpret output |
+| `get_content` | Read files/directories and have the model answer from their content |
+| `git_command` | Run Git commands and have the model interpret output |
+| `npm_command` | Run npm commands and have the model interpret output |
+| `npx_command` | Run npx commands and have the model interpret output |
+| `node_command` | Run Node.js commands and have the model interpret output |
+| `pnpm_command`, `yarn_command` | Run alternative JavaScript package managers |
+| `tsc_command`, `eslint_command`, `prettier_command` | Run TypeScript, lint, and format checks |
+| `vitest_command`, `jest_command`, `playwright_command` | Run JavaScript and browser test tools |
+| `python_command`, `pip_command`, `pytest_command`, `uv_command`, `poetry_command` | Run Python tooling |
+| `docker_command`, `docker_compose_command`, `kubectl_command` | Run container and cluster tooling |
+| `curl_command`, `jq_command`, `fd_command`, `ls_command`, `dir_command`, `powershell_command` | Run common shell and inspection tools |
+| `task_command`, `make_command`, `just_command` | Run task runners and build recipes |
+| `cargo_command`, `go_command`, `dotnet_command`, `mvn_command`, `gradle_command` | Run language-specific build tools |
+| `ollama_command` | Run Ollama CLI commands |
 | `list_patterns` | List available intent patterns |
 | `register_pattern` | Create a reusable pattern for a recurring task |
 
@@ -18,7 +34,7 @@ Local Ollama inference bridge. Use for privacy-sensitive, repetitive, or large-p
 
 - `paths` (required) — array of absolute directory paths to add to this session's allowed directories
 
-**Security model**: When `BRIDGE_ALLOWED_DIRS` is set, dynamic directories are constrained to subdirectories of the static allowed directories. When `BRIDGE_ALLOWED_DIRS` is not set (defaulting to current working directory), any existing directory can be declared.
+**Security model**: Any existing directory can be declared at runtime. Declared directories are session-scoped and become part of the effective allowed directory set.
 
 **Behavior**: Idempotent — calling multiple times merges paths without duplicates. Call once at session start before issuing `run_command` or `query_local_model` calls that reference project directories.
 
@@ -55,6 +71,18 @@ Common repo-inspection commands (always use flags to limit output):
 - `git show HEAD:src/config.ts` — file content at HEAD
 
 Always pipe or flag commands to limit output (`--max-count`, `--oneline`, `-l`, `--stat`, `-L`) before the token budget is exceeded.
+
+## Context gathering tools
+
+Use these when you need Orchestrama to gather context before answering:
+
+- `rg_search` — pass `prompt` plus `pattern`; optionally pass `cwd`, `globs`, `case_sensitive`, `context_lines`, and `max_output_chars`.
+- `gh_command` — pass `prompt` plus `args`, where `args` are the tokens after `gh`, e.g. `["pr", "view", "123", "--comments"]`.
+- `get_content` — pass `prompt` plus `paths` for files or directories to read.
+
+All three send the gathered context through the local model pipeline and support optional `model`, `intent`, `system_prompt`, and `options`.
+
+For common developer commands, use the matching `*_command` tool with `prompt` plus `command`. The `command` value is the argument string after the executable, e.g. `status --short`, `run build`, `vitest --run`, `test ./...`, `ps`, or `--version`.
 
 ## Behaviours to know
 

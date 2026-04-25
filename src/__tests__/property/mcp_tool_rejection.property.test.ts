@@ -8,6 +8,9 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { PROGRAM_COMMAND_SPECS } from "../../tools/context_tools.js";
+
+const PROGRAM_COMMAND_NAMES = PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName);
 
 // ---------------------------------------------------------------------------
 // Local dispatch function that mirrors the CallTool switch in server.ts.
@@ -26,9 +29,22 @@ function dispatch(name: string): void {
       return;
     case "get_bridge_limits":
       return;
+    case "run_command":
+      return;
+    case "rg_search":
+      return;
+    case "gh_command":
+      return;
+    case "get_content":
+      return;
+    case "declare_working_dirs":
+      return;
     case "setup_bridge":
       return;
     default:
+      if (PROGRAM_COMMAND_NAMES.includes(name)) {
+        return;
+      }
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
   }
 }
@@ -50,6 +66,12 @@ describe("Property 2: MCP server rejects unknown tool names", () => {
             "list_patterns",
             "register_pattern",
             "get_bridge_limits",
+            "run_command",
+            "rg_search",
+            "gh_command",
+            "get_content",
+            ...PROGRAM_COMMAND_NAMES,
+            "declare_working_dirs",
             "setup_bridge",
           ].includes(s)),
           (name) => {
@@ -82,6 +104,18 @@ describe("Property 2: MCP server rejects unknown tool names", () => {
 
   it('does NOT throw for "get_bridge_limits"', () => {
     expect(() => dispatch("get_bridge_limits")).not.toThrow();
+  });
+
+  it('does NOT throw for "rg_search", "gh_command", and "get_content"', () => {
+    expect(() => dispatch("rg_search")).not.toThrow();
+    expect(() => dispatch("gh_command")).not.toThrow();
+    expect(() => dispatch("get_content")).not.toThrow();
+  });
+
+  it("does NOT throw for generated program command tools", () => {
+    for (const name of PROGRAM_COMMAND_NAMES) {
+      expect(() => dispatch(name)).not.toThrow();
+    }
   });
 
   // Feature: dual-console-separation, Property 2: MCP server rejects all non-query tool names

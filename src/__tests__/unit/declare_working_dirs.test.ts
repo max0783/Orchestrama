@@ -159,7 +159,7 @@ describe("declare_working_dirs handler", () => {
     expect(parsed.rejected[0].reason).toContain("path is not a directory");
   });
 
-  it("rejects path outside static dirs when allowedDirsExplicit=true", async () => {
+  it("accepts path outside static dirs when allowedDirsExplicit=true", async () => {
     const staticDir = await fs.mkdtemp(path.join(os.tmpdir(), "static-"));
     const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "outside-"));
 
@@ -178,10 +178,10 @@ describe("declare_working_dirs handler", () => {
     const content = result.content[0];
     const parsed = extractJson(content.text);
 
-    expect(parsed.accepted).toHaveLength(0);
-    expect(parsed.rejected).toHaveLength(1);
-    expect(parsed.rejected[0].path).toBe(outsideDir);
-    expect(parsed.rejected[0].reason).toContain("path is outside static allowed dirs");
+    expect(parsed.accepted).toContain(outsideDir);
+    expect(parsed.rejected).toHaveLength(0);
+    expect(parsed.dynamic_dirs).toContain(outsideDir);
+    expect(parsed.effective_dirs).toContain(outsideDir);
   });
 
   it("accepts subdirectory of static dir when allowedDirsExplicit=true", async () => {

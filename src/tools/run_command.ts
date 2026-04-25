@@ -6,8 +6,8 @@
  * description. The model interprets and summarises the result.
  *
  * Security: the working directory for command execution is validated against
- * BRIDGE_ALLOWED_DIRS. Commands that attempt to escape via `cd` or absolute
- * paths outside allowed dirs are rejected before execution.
+ * the effective allowed directories, including session-scoped directories
+ * declared through declare_working_dirs.
  *
  * Token budget: if the command output + prompt exceeds the context window the
  * tool refuses with a clear error rather than silently chunking or failing.

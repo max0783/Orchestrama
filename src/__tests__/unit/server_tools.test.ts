@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { TOOL_DEFINITIONS } from "../../server_tools.js";
+import { PROGRAM_COMMAND_SPECS } from "../../tools/context_tools.js";
 
 describe("TOOL_DEFINITIONS", () => {
-  // 1. Exactly 8 tools
-  it("has exactly 8 entries", () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(8);
+  // 1. All static tools plus generated command tools
+  it("has the expected number of entries", () => {
+    expect(TOOL_DEFINITIONS).toHaveLength(11 + PROGRAM_COMMAND_SPECS.length);
   });
 
   // 2. Tool names are exactly the expected set
@@ -17,6 +18,10 @@ describe("TOOL_DEFINITIONS", () => {
       "register_pattern",
       "get_bridge_limits",
       "run_command",
+      "rg_search",
+      "gh_command",
+      "get_content",
+      ...PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName),
       "declare_working_dirs",
       "setup_bridge",
     ]);
@@ -110,5 +115,22 @@ describe("TOOL_DEFINITIONS", () => {
     expect(props["paths"].items?.type).toBe("string");
     const required = (tool.inputSchema as { required?: string[] }).required ?? [];
     expect(required).toContain("paths");
+  });
+
+  it("context gathering tools require prompt plus their context selector", () => {
+    const rgTool = TOOL_DEFINITIONS.find((t) => t.name === "rg_search")!;
+    const ghTool = TOOL_DEFINITIONS.find((t) => t.name === "gh_command")!;
+    const contentTool = TOOL_DEFINITIONS.find((t) => t.name === "get_content")!;
+
+    expect((rgTool.inputSchema as { required?: string[] }).required).toEqual(["prompt", "pattern"]);
+    expect((ghTool.inputSchema as { required?: string[] }).required).toEqual(["prompt", "args"]);
+    expect((contentTool.inputSchema as { required?: string[] }).required).toEqual(["prompt", "paths"]);
+  });
+
+  it("program command tools require prompt and command", () => {
+    for (const name of PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName)) {
+      const tool = TOOL_DEFINITIONS.find((t) => t.name === name)!;
+      expect((tool.inputSchema as { required?: string[] }).required).toEqual(["prompt", "command"]);
+    }
   });
 });

@@ -34,7 +34,7 @@ ls dist/server.js
 
 ## MCP Server
 
-The MCP server is what your AI orchestrator connects to. It exposes six tools:
+The MCP server is what your AI orchestrator connects to. It exposes these tools:
 
 | Tool | Purpose |
 |---|---|
@@ -43,6 +43,24 @@ The MCP server is what your AI orchestrator connects to. It exposes six tools:
 | `list_patterns` | List built-in and custom intent patterns for task-specific routing |
 | `register_pattern` | Register a custom pattern for specialized system prompts |
 | `get_bridge_limits` | Return enforced context limits and allowed directories |
+| `run_command` | Run a bounded shell command and have the model interpret output |
+| `rg_search` | Search with ripgrep and have the model interpret matches |
+| `gh_command` | Run GitHub CLI commands and have the model interpret output |
+| `get_content` | Read files/directories and have the model answer from their content |
+| `git_command` | Run Git commands and have the model interpret output |
+| `npm_command` | Run npm commands and have the model interpret output |
+| `npx_command` | Run npx commands and have the model interpret output |
+| `node_command` | Run Node.js commands and have the model interpret output |
+| `pnpm_command`, `yarn_command` | Run alternative JavaScript package managers |
+| `tsc_command`, `eslint_command`, `prettier_command` | Run TypeScript, lint, and format checks |
+| `vitest_command`, `jest_command`, `playwright_command` | Run JavaScript and browser test tools |
+| `python_command`, `pip_command`, `pytest_command`, `uv_command`, `poetry_command` | Run Python tooling |
+| `docker_command`, `docker_compose_command`, `kubectl_command` | Run container and cluster tooling |
+| `curl_command`, `jq_command`, `fd_command`, `ls_command`, `dir_command`, `powershell_command` | Run common shell and inspection tools |
+| `task_command`, `make_command`, `just_command` | Run task runners and build recipes |
+| `cargo_command`, `go_command`, `dotnet_command`, `mvn_command`, `gradle_command` | Run language-specific build tools |
+| `ollama_command` | Run Ollama CLI commands |
+| `declare_working_dirs` | Declare session-scoped working directories for dynamic access |
 | `setup_bridge` | Generate client-specific configuration snippet plus usage guide |
 
 ### Wiring into Kiro
@@ -100,7 +118,7 @@ Verify the server works without a client:
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | node dist/server.js
 ```
 
-Expected: JSON response listing all six tools.
+Expected: JSON response listing the MCP tools.
 
 ---
 

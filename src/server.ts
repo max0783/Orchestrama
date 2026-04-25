@@ -39,6 +39,13 @@ import { createSetupBridgeHandler } from "./tools/setup_bridge.js";
 import { SetupTool } from "./tools/setup_bridge_tool.js";
 import { createRunCommandHandler } from "./tools/run_command.js";
 import { createDeclareWorkingDirsHandler } from "./tools/declare_working_dirs.js";
+import {
+  createGetContentHandler,
+  createGhCommandHandler,
+  PROGRAM_COMMAND_SPECS,
+  createProgramCommandHandler,
+  createRgSearchHandler,
+} from "./tools/context_tools.js";
 import { TOOL_DEFINITIONS } from "./server_tools.js";
 
 // ---------------------------------------------------------------------------
@@ -135,6 +142,27 @@ async function main(): Promise<void> {
     registry: sessionRegistry,
     sessionId: SESSION_ID,
   });
+  const rgSearchHandler = createRgSearchHandler({
+    queryHandler,
+    pathValidator,
+    sessionId: SESSION_ID,
+  });
+  const ghCommandHandler = createGhCommandHandler({
+    queryHandler,
+    pathValidator,
+    sessionId: SESSION_ID,
+  });
+  const getContentHandler = createGetContentHandler(queryHandler);
+  const programCommandHandlers = new Map(
+    PROGRAM_COMMAND_SPECS.map((spec) => [
+      spec.toolName,
+      createProgramCommandHandler(
+        { queryHandler, pathValidator, sessionId: SESSION_ID },
+        spec.executable,
+        spec.toolName
+      ),
+    ])
+  );
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -156,7 +184,16 @@ async function main(): Promise<void> {
         return runCommandHandler(args);
       case "declare_working_dirs":
         return declareWorkingDirsHandler(args);
+      case "rg_search":
+        return rgSearchHandler(args);
+      case "gh_command":
+        return ghCommandHandler(args);
+      case "get_content":
+        return getContentHandler(args);
       default:
+        if (programCommandHandlers.has(name)) {
+          return programCommandHandlers.get(name)!(args);
+        }
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
     }
   });

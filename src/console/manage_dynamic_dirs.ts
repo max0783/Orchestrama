@@ -11,7 +11,6 @@
  */
 
 import fs from "fs/promises";
-import path from "path";
 import readline from "readline";
 import type { BridgeConfig } from "../types.js";
 import type { ISessionRegistry } from "../session/registry.js";
@@ -46,20 +45,6 @@ async function validatePath(inputPath: string): Promise<{ valid: boolean; resolv
   } catch (err) {
     return { valid: false, error: "path does not exist or cannot be accessed" };
   }
-}
-
-/**
- * Checks if a path is within the static allowed dirs.
- */
-function isWithinStaticDirs(resolvedPath: string, staticDirs: string[]): boolean {
-  const isWindows = process.platform === "win32";
-  const normalizedPath = isWindows ? resolvedPath.toLowerCase() : resolvedPath;
-
-  return staticDirs.some((dir) => {
-    const normalizedDir = isWindows ? dir.toLowerCase() : dir;
-    const dirWithSep = normalizedDir.endsWith(path.sep) ? normalizedDir : normalizedDir + path.sep;
-    return normalizedPath === normalizedDir || normalizedPath.startsWith(dirWithSep);
-  });
 }
 
 export async function manageDynamicDirs(opts: ManageDynamicDirsOptions): Promise<void> {
@@ -127,16 +112,6 @@ export async function manageDynamicDirs(opts: ManageDynamicDirsOptions): Promise
       }
 
       const resolved = validation.resolved!;
-
-      // Check security policy
-      if (config.allowedDirsExplicit && !isWithinStaticDirs(resolved, staticDirs)) {
-        console.log(
-          `✗ Security policy: path must be within static allowed dirs when BRIDGE_ALLOWED_DIRS is set.`
-        );
-        console.log(`  Path: ${resolved}`);
-        console.log(`  Static dirs: ${staticDirs.join(", ")}`);
-        continue;
-      }
 
       // Add to registry
       registry.addDirs(sessionId, [resolved]);

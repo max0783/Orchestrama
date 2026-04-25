@@ -25,7 +25,7 @@ export interface BridgeConfig {
   /**
    * True when BRIDGE_ALLOWED_DIRS was explicitly set in the environment.
    * False when defaulting to [process.cwd()].
-   * Used by declare_working_dirs to determine security policy.
+   * Preserved for configuration reporting and compatibility.
    */
   allowedDirsExplicit: boolean;
   /** BRIDGE_SYSTEM_PROMPT — or built-in default */

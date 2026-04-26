@@ -150,7 +150,7 @@ export class FileReader {
     // Step 2: Security check
     if (!this.pathValidator.isAllowed(resolvedPath, this.sessionId)) {
       process.stderr.write(
-        `[ollama-mcp-bridge] WARNING: Security violation - path outside allowed directories: ${inputPath}\n`
+        `[orchestrama] WARNING: Security violation - path outside allowed directories: ${inputPath}\n`
       );
       return [
         {
@@ -179,7 +179,7 @@ export class FileReader {
 
     if (this._isIgnoredPath(resolvedPath, stat.isDirectory(), ignoreRules)) {
       process.stderr.write(
-        `[ollama-mcp-bridge] INFO: Excluding ${inputPath} (matched .bridgeignore pattern)\n`
+        `[orchestrama] INFO: Excluding ${inputPath} (matched .bridgeignore pattern)\n`
       );
       if (stat.isDirectory()) {
         return [];
@@ -249,7 +249,7 @@ export class FileReader {
     // Binary detection: check for null bytes
     if (buffer.includes(0)) {
       process.stderr.write(
-        `[ollama-mcp-bridge] WARNING: Excluding binary file: ${originalPath}\n`
+        `[orchestrama] WARNING: Excluding binary file: ${originalPath}\n`
       );
       return {
         path: originalPath,
@@ -265,7 +265,7 @@ export class FileReader {
       content = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
     } catch {
       process.stderr.write(
-        `[ollama-mcp-bridge] WARNING: Excluding binary file: ${originalPath}\n`
+        `[orchestrama] WARNING: Excluding binary file: ${originalPath}\n`
       );
       return {
         path: originalPath,

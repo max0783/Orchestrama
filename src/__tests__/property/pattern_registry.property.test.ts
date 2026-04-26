@@ -259,7 +259,7 @@ describe("Property 10: list_patterns filter correctness", () => {
             await registry.register(name, description);
           }
 
-          const lowerFilter = filter.toLowerCase();
+          const lowerFilter = filter.trim().toLowerCase();
           const filtered = registry.list(filter);
 
           // Every returned pattern must match the filter

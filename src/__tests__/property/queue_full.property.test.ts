@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 21: Queue-full rejection
+// Feature: orchestrama, Property 21: Queue-full rejection
 // For any invocation that arrives when the queue already contains
 // BRIDGE_QUEUE_MAX_SIZE pending requests, the bridge should immediately return
 // an MCP error with code `queue_full` without enqueuing the request.

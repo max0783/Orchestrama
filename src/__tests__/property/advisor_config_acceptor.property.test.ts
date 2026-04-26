@@ -10,6 +10,7 @@ import {
   applyRecommendation,
   formatAcceptanceConfirmation,
 } from "../../advisor/config_acceptor.js";
+import { suggestBridgeContextLimits } from "../../advisor/context_limits.js";
 import type { Recommendation } from "../../advisor/types.js";
 import type { BridgeConfig } from "../../types.js";
 
@@ -54,7 +55,7 @@ function makeBridgeConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig {
     queueMaxSize: 10,
     numParallel: 1,
     requestTimeoutMs: 300000,
-    reductionLogPath: "./ollama-bridge-reductions.jsonl",
+    reductionLogPath: "./orchestrama-reductions.jsonl",
     logLevel: "info",
     disableProgress: false,
     ...overrides,
@@ -89,12 +90,17 @@ describe("Property 23: Configuration acceptance correctness", () => {
         savedEnv["OLLAMA_DEFAULT_MODEL"] = process.env["OLLAMA_DEFAULT_MODEL"];
         savedEnv["OLLAMA_NUM_CTX"] = process.env["OLLAMA_NUM_CTX"];
         savedEnv["OLLAMA_FLASH_ATTENTION"] = process.env["OLLAMA_FLASH_ATTENTION"];
+        savedEnv["BRIDGE_MAX_CONTEXT_FILES"] = process.env["BRIDGE_MAX_CONTEXT_FILES"];
+        savedEnv["BRIDGE_MAX_FILE_TOKENS"] = process.env["BRIDGE_MAX_FILE_TOKENS"];
+        savedEnv["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] =
+          process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"];
 
         const config = makeBridgeConfig();
         await applyRecommendation(config, rec);
 
         expect(config.defaultModel).toBe(rec.modelName);
         expect(config.contextWindow).toBe(rec.contextWindow);
+        expect(config).toMatchObject(suggestBridgeContextLimits(rec.contextWindow));
       }),
       { numRuns: 100 }
     );
@@ -106,12 +112,26 @@ describe("Property 23: Configuration acceptance correctness", () => {
         savedEnv["OLLAMA_DEFAULT_MODEL"] = process.env["OLLAMA_DEFAULT_MODEL"];
         savedEnv["OLLAMA_NUM_CTX"] = process.env["OLLAMA_NUM_CTX"];
         savedEnv["OLLAMA_FLASH_ATTENTION"] = process.env["OLLAMA_FLASH_ATTENTION"];
+        savedEnv["BRIDGE_MAX_CONTEXT_FILES"] = process.env["BRIDGE_MAX_CONTEXT_FILES"];
+        savedEnv["BRIDGE_MAX_FILE_TOKENS"] = process.env["BRIDGE_MAX_FILE_TOKENS"];
+        savedEnv["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] =
+          process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"];
 
         const config = makeBridgeConfig();
         await applyRecommendation(config, rec);
+        const suggestedLimits = suggestBridgeContextLimits(rec.contextWindow);
 
         expect(process.env["OLLAMA_DEFAULT_MODEL"]).toBe(rec.modelName);
         expect(process.env["OLLAMA_NUM_CTX"]).toBe(String(rec.contextWindow));
+        expect(process.env["BRIDGE_MAX_CONTEXT_FILES"]).toBe(
+          String(suggestedLimits.maxContextFiles)
+        );
+        expect(process.env["BRIDGE_MAX_FILE_TOKENS"]).toBe(
+          String(suggestedLimits.maxFileTokens)
+        );
+        expect(process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"]).toBe(
+          String(suggestedLimits.maxTotalContextTokens)
+        );
       }),
       { numRuns: 100 }
     );
@@ -160,10 +180,14 @@ describe("Property 25: Acceptance confirmation completeness", () => {
     fc.assert(
       fc.property(recommendationArb, (rec) => {
         const output = formatAcceptanceConfirmation(rec);
+        const suggestedLimits = suggestBridgeContextLimits(rec.contextWindow);
 
         expect(output).toContain(rec.modelName);
         // Context window may appear formatted with locale separators
         expect(output).toContain(rec.contextWindow.toLocaleString("en-US"));
+        expect(output).toContain(suggestedLimits.maxTotalContextTokens.toLocaleString("en-US"));
+        expect(output).toContain(suggestedLimits.maxFileTokens.toLocaleString("en-US"));
+        expect(output).toContain(String(suggestedLimits.maxContextFiles));
       }),
       { numRuns: 100 }
     );

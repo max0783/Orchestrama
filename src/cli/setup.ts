@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ollama-mcp-bridge interactive setup console
+ * orchestrama interactive setup console
  *
  * Runs in one shot:
  *   1. Checks prerequisites (Node version, Ollama reachability)
@@ -289,7 +289,7 @@ async function writeJsonConfig(client: ClientDef, model: string, ollamaUrl: stri
   }
 
   const servers = (existing[client.mergeKey] as Record<string, unknown>) ?? {};
-  servers["ollama-mcp-bridge"] = buildServerEntry(model, ollamaUrl);
+  servers["orchestrama"] = buildServerEntry(model, ollamaUrl);
   existing[client.mergeKey] = servers;
 
   await fs.writeFile(client.configPath, JSON.stringify(existing, null, 2), "utf-8");
@@ -301,7 +301,7 @@ async function writeTomlConfig(client: ClientDef, model: string, ollamaUrl: stri
   const escapedPath = SERVER_PATH.replace(/\\/g, "\\\\");
   const block = [
     ``,
-    `[mcp_servers.ollama-mcp-bridge]`,
+    `[mcp_servers.orchestrama]`,
     `command = "node"`,
     `args = ["${escapedPath}"]`,
     `env = { "OLLAMA_BASE_URL" = "${ollamaUrl}", "OLLAMA_DEFAULT_MODEL" = "${model}", "OLLAMA_CONTEXT_WINDOW" = "4096", "OLLAMA_KEEP_ALIVE" = "10m", "BRIDGE_ALLOWED_DIRS" = "${process.cwd().replace(/\\/g, "\\\\")}" }`,
@@ -310,9 +310,9 @@ async function writeTomlConfig(client: ClientDef, model: string, ollamaUrl: stri
   let existing = "";
   if (await fileExists(client.configPath)) {
     existing = await fs.readFile(client.configPath, "utf-8");
-    // Remove any previous ollama-mcp-bridge block
+    // Remove any previous orchestrama block
     existing = existing.replace(
-      /\n?\[mcp_servers\.ollama-mcp-bridge\][^\[]*/s,
+      /\n?\[mcp_servers\.orchestrama\][^\[]*/s,
       ""
     );
   }
@@ -328,7 +328,7 @@ async function writeConfigs(detected: ClientDef[], model: string, ollamaUrl: str
     const out = path.join(process.cwd(), "mcp-config-snippet.json");
     await fs.writeFile(
       out,
-      JSON.stringify({ mcpServers: { "ollama-mcp-bridge": buildServerEntry(model, ollamaUrl) } }, null, 2),
+      JSON.stringify({ mcpServers: { "orchestrama": buildServerEntry(model, ollamaUrl) } }, null, 2),
       "utf-8"
     );
     ok(`Generic snippet written to ${out}`);
@@ -394,7 +394,7 @@ function printSystemPrompt(model: string) {
   step("Ready-to-paste system prompt for your orchestrator");
 
   const prompt = `\
-You have access to a local Ollama bridge via the \`ollama-mcp-bridge\` MCP server.
+You have access to a local orchestrama via the \`orchestrama\` MCP server.
 Use it to offload token-expensive tasks to the local model (${model}) instead of processing them yourself.
 
 ## When to delegate to the bridge
@@ -443,7 +443,7 @@ query_local_model(
 
 async function main() {
   console.clear();
-  console.log(`\n${BOLD}${CYAN}  ollama-mcp-bridge  setup console${RESET}`);
+  console.log(`\n${BOLD}${CYAN}  orchestrama  setup console${RESET}`);
   console.log(`${DIM}  Configures the bridge for every MCP client on this machine${RESET}`);
   hr();
 

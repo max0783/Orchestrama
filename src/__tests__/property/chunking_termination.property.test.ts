@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 9: Chunking termination and completeness
+// Feature: orchestrama, Property 9: Chunking termination and completeness
 // For any payload of arbitrary size, the Map-Reduce processor should always terminate
 // and return a non-empty response (no infinite recursion), and the final response
 // should be derived from all chunks.

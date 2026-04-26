@@ -48,7 +48,7 @@ describe("loadConfig", () => {
     expect(config.fallbackModels).toEqual([]);
     expect(config.queueMaxSize).toBe(10);
     expect(config.requestTimeoutMs).toBe(300000);
-    expect(config.reductionLogPath).toBe("./ollama-bridge-reductions.jsonl");
+    expect(config.reductionLogPath).toBe("./orchestrama-reductions.jsonl");
     expect(config.logLevel).toBe("info");
     expect(config.disableProgress).toBe(false);
     expect(config.keepAliveOnStart).toBe(false);

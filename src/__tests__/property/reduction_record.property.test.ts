@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 13: Reduction record completeness
+// Feature: orchestrama, Property 13: Reduction record completeness
 // For any completed query_local_model invocation (with mocked Ollama), the
 // reduction log should contain exactly one new record with all required fields:
 // timestamp, tool, model, inputTokens, outputTokens, reductionRatio, taskType,

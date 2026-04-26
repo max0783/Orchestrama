@@ -66,7 +66,7 @@ function parsePositiveInt(name: string, raw: string | undefined, defaultValue: n
   const parsed = Number(raw);
   if (Number.isNaN(parsed) || parsed <= 0) {
     process.stderr.write(
-      `[ollama-mcp-bridge] ERROR: ${name} must be a positive integer, got: "${raw}"\n`
+      `[orchestrama] ERROR: ${name} must be a positive integer, got: "${raw}"\n`
     );
     process.exit(1);
   }
@@ -85,14 +85,14 @@ function parseCapabilityMap(raw: string | undefined): CapabilityMap {
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       process.stderr.write(
-        `[ollama-mcp-bridge] ERROR: BRIDGE_CAPABILITY_MAP must be a JSON object, got: ${raw}\n`
+        `[orchestrama] ERROR: BRIDGE_CAPABILITY_MAP must be a JSON object, got: ${raw}\n`
       );
       return {};
     }
     return parsed as CapabilityMap;
   } catch {
     process.stderr.write(
-      `[ollama-mcp-bridge] ERROR: Failed to parse BRIDGE_CAPABILITY_MAP as JSON: ${raw}\n`
+      `[orchestrama] ERROR: Failed to parse BRIDGE_CAPABILITY_MAP as JSON: ${raw}\n`
     );
     return {};
   }
@@ -110,13 +110,13 @@ function parseModelOptions(raw: string | undefined): ModelOptions | undefined {
     parsed = JSON.parse(raw);
   } catch {
     process.stderr.write(
-      `[ollama-mcp-bridge] ERROR: Failed to parse OLLAMA_MODEL_OPTIONS as JSON: ${raw}\n`
+      `[orchestrama] ERROR: Failed to parse OLLAMA_MODEL_OPTIONS as JSON: ${raw}\n`
     );
     return undefined;
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     process.stderr.write(
-      `[ollama-mcp-bridge] ERROR: OLLAMA_MODEL_OPTIONS must be a JSON object, got: ${raw}\n`
+      `[orchestrama] ERROR: OLLAMA_MODEL_OPTIONS must be a JSON object, got: ${raw}\n`
     );
     return undefined;
   }
@@ -200,7 +200,7 @@ export function loadConfig(): BridgeConfig {
       ? fallbackModelsRaw.split(",").map((m) => m.trim()).filter(Boolean)
       : [];
 
-  const reductionLogPath = env["BRIDGE_REDUCTION_LOG"] ?? "./ollama-bridge-reductions.jsonl";
+  const reductionLogPath = env["BRIDGE_REDUCTION_LOG"] ?? "./orchestrama-reductions.jsonl";
 
   const logLevelRaw = env["BRIDGE_LOG_LEVEL"] ?? "info";
   const logLevel: "info" | "debug" = logLevelRaw === "debug" ? "debug" : "info";

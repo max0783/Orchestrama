@@ -1,5 +1,5 @@
 /**
- * Human Console entry point for ollama-mcp-bridge.
+ * Human Console entry point for orchestrama.
  *
  * Interactive CLI that provides access to all administrative tools:
  * list models, ping model, set default model, run benchmarks, view
@@ -98,7 +98,7 @@ async function appendBenchmarkLog(text: string): Promise<void> {
     await fs.appendFile(BENCHMARK_LOG_PATH, text + "\n\n", "utf-8");
   } catch (err) {
     process.stderr.write(
-      `[ollama-mcp-bridge] Failed to append benchmark log: ${err instanceof Error ? err.message : String(err)}\n`
+      `[orchestrama] Failed to append benchmark log: ${err instanceof Error ? err.message : String(err)}\n`
     );
   }
 }
@@ -251,7 +251,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
 
   while (true) {
-    console.log("\nollama-mcp-bridge Console");
+    console.log("\norchestrama Console");
 
     let action: MenuAction;
     try {

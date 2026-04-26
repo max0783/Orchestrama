@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 7: Token estimation formula
+// Feature: orchestrama, Property 7: Token estimation formula
 // For any string s, estimateTokens(s) should equal Math.floor(s.length / 4).
 //
 // **Validates: Requirements 4.1**

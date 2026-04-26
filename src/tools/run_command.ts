@@ -1,9 +1,9 @@
 /**
  * run_command tool handler.
  *
- * Executes a shell command, captures its output, then sends the output to the
- * local Ollama model along with the caller's prompt and expected_output
- * description. The model interprets and summarises the result.
+ * Executes a shell command and captures its output. By default it sends the
+ * output to the local Ollama model for interpretation; callers can set
+ * interpret=false to return bounded raw output without spending model tokens.
  *
  * Security: the working directory for command execution is validated against
  * the effective allowed directories, including session-scoped directories
@@ -27,8 +27,9 @@ import type { IPathValidator } from "../security/path_validator.js";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Hard cap on raw command output fed to the model (characters). */
-const MAX_OUTPUT_CHARS = 32_000;
+/** Default cap on raw command output fed to the model (characters). */
+const DEFAULT_MAX_OUTPUT_CHARS = 12_000;
+const MAX_OUTPUT_CHARS_LIMIT = 64_000;
 
 /** Timeout for command execution in ms. */
 const DEFAULT_COMMAND_TIMEOUT_MS = 30_000;
@@ -100,6 +101,8 @@ interface ValidatedInput {
   expected_output: string;
   cwd: string;
   model: string | undefined;
+  interpret: boolean;
+  max_output_chars: number;
 }
 
 function validateInput(args: unknown, defaultCwd: string): ValidatedInput {
@@ -114,7 +117,10 @@ function validateInput(args: unknown, defaultCwd: string): ValidatedInput {
   if (typeof a["command"] !== "string" || a["command"].trim() === "") {
     throw new McpError(ErrorCode.InvalidParams, '"command" must be a non-empty string');
   }
-  if (typeof a["expected_output"] !== "string" || a["expected_output"].trim() === "") {
+  if (
+    a["expected_output"] !== undefined &&
+    (typeof a["expected_output"] !== "string" || a["expected_output"].trim() === "")
+  ) {
     throw new McpError(
       ErrorCode.InvalidParams,
       '"expected_output" must be a non-empty string describing what the command output should contain'
@@ -126,6 +132,23 @@ function validateInput(args: unknown, defaultCwd: string): ValidatedInput {
       `"model" must be a string, got ${typeof a["model"]}`
     );
   }
+  if (a["interpret"] !== undefined && typeof a["interpret"] !== "boolean") {
+    throw new McpError(ErrorCode.InvalidParams, '"interpret" must be a boolean');
+  }
+  if (
+    a["max_output_chars"] !== undefined &&
+    (
+      typeof a["max_output_chars"] !== "number" ||
+      !Number.isInteger(a["max_output_chars"]) ||
+      a["max_output_chars"] < 1_000 ||
+      a["max_output_chars"] > MAX_OUTPUT_CHARS_LIMIT
+    )
+  ) {
+    throw new McpError(
+      ErrorCode.InvalidParams,
+      `"max_output_chars" must be an integer between 1000 and ${MAX_OUTPUT_CHARS_LIMIT}`
+    );
+  }
 
   const cwd =
     typeof a["cwd"] === "string" && a["cwd"].trim() !== ""
@@ -135,9 +158,15 @@ function validateInput(args: unknown, defaultCwd: string): ValidatedInput {
   return {
     prompt: (a["prompt"] as string).trim(),
     command: (a["command"] as string).trim(),
-    expected_output: (a["expected_output"] as string).trim(),
+    expected_output:
+      typeof a["expected_output"] === "string"
+        ? a["expected_output"].trim()
+        : "Interpret the command output and exit code.",
     cwd,
     model: a["model"] as string | undefined,
+    interpret: (a["interpret"] as boolean | undefined) ?? true,
+    max_output_chars:
+      (a["max_output_chars"] as number | undefined) ?? DEFAULT_MAX_OUTPUT_CHARS,
   };
 }
 
@@ -161,7 +190,15 @@ export function createRunCommandHandler(deps: RunCommandHandlerDeps) {
     // -----------------------------------------------------------------------
     // 1. Validate input
     // -----------------------------------------------------------------------
-    const { prompt, command, expected_output, cwd, model: explicitModel } =
+    const {
+      prompt,
+      command,
+      expected_output,
+      cwd,
+      model: explicitModel,
+      interpret,
+      max_output_chars,
+    } =
       validateInput(args, process.cwd());
 
     // -----------------------------------------------------------------------
@@ -183,7 +220,7 @@ export function createRunCommandHandler(deps: RunCommandHandlerDeps) {
     // 3. Execute the command
     // -----------------------------------------------------------------------
     process.stderr.write(
-      `[ollama-mcp-bridge] run_command | cmd="${command}" | cwd="${resolvedCwd}"\n`
+      `[orchestrama] run_command | cmd="${command}" | cwd="${resolvedCwd}"\n`
     );
 
     const execResult = await execCommand(
@@ -209,25 +246,33 @@ export function createRunCommandHandler(deps: RunCommandHandlerDeps) {
       .trim();
 
     const commandOutput =
-      rawOutput.length > MAX_OUTPUT_CHARS
-        ? rawOutput.slice(0, MAX_OUTPUT_CHARS) +
-          `\n\n[output truncated — ${rawOutput.length - MAX_OUTPUT_CHARS} chars omitted]`
+      rawOutput.length > max_output_chars
+        ? rawOutput.slice(0, max_output_chars) +
+          `\n\n[output truncated — ${rawOutput.length - max_output_chars} chars omitted]`
         : rawOutput || "(no output)";
 
-    const exitInfo =
-      execResult.exitCode !== null && execResult.exitCode !== 0
-        ? `\n[exit code: ${execResult.exitCode}]`
-        : "";
+    if (!interpret) {
+      const text = [
+        `Command: \`${command}\``,
+        `Cwd: ${resolvedCwd}`,
+        `Exit code: ${execResult.exitCode ?? "unknown"}`,
+        ``,
+        commandOutput,
+      ].join("\n");
+      return { content: [{ type: "text" as const, text }] };
+    }
 
     // -----------------------------------------------------------------------
     // 4. Build the model payload
     // -----------------------------------------------------------------------
     const modelPrompt = [
       `Command run: ${command}`,
+      `Working directory: ${resolvedCwd}`,
+      `Exit code: ${execResult.exitCode ?? "unknown"}`,
       `Expected output: ${expected_output}`,
       ``,
       `--- Command output ---`,
-      commandOutput + exitInfo,
+      commandOutput,
       `--- End output ---`,
       ``,
       prompt,
@@ -236,7 +281,8 @@ export function createRunCommandHandler(deps: RunCommandHandlerDeps) {
     const systemPrompt =
       "You are a command output interpreter. " +
       "The user ran a shell command and provided its output. " +
-      "Answer the user's question based strictly on the command output shown. " +
+      "Answer the user's question based strictly on the command, exit code, and output shown. " +
+      "Treat exit code 0 as success even when output is empty. " +
       "Be concise. No preamble. If the output does not contain enough information to answer, say so explicitly.";
 
     // -----------------------------------------------------------------------

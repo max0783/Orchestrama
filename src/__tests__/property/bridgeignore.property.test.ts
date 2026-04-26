@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 17: .bridgeignore pattern exclusion
+// Feature: orchestrama, Property 17: .bridgeignore pattern exclusion
 // For any set of file paths and a `.bridgeignore` file containing glob patterns,
 // every file whose path matches at least one pattern should be absent from the
 // file reader output.

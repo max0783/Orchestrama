@@ -81,7 +81,7 @@ export class RequestQueue {
       // Log queue wait time to stderr on dequeue (Req 18.6)
       const waitTime = Date.now() - enqueueTime;
       process.stderr.write(
-        `[ollama-mcp-bridge] Queue wait time: ${waitTime}ms\n`
+        `[orchestrama] Queue wait time: ${waitTime}ms\n`
       );
 
       // Per-request timeout (Req 18.3)

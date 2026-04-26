@@ -5,7 +5,7 @@ import { PROGRAM_COMMAND_SPECS } from "../../tools/context_tools.js";
 describe("TOOL_DEFINITIONS", () => {
   // 1. All static tools plus generated command tools
   it("has the expected number of entries", () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(11 + PROGRAM_COMMAND_SPECS.length);
+    expect(TOOL_DEFINITIONS).toHaveLength(12 + PROGRAM_COMMAND_SPECS.length);
   });
 
   // 2. Tool names are exactly the expected set
@@ -23,6 +23,7 @@ describe("TOOL_DEFINITIONS", () => {
       "get_content",
       ...PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName),
       "declare_working_dirs",
+      "feedback",
       "setup_bridge",
     ]);
   });
@@ -87,21 +88,25 @@ describe("TOOL_DEFINITIONS", () => {
     expect(props["include_env"].type).toBe("boolean");
   });
 
-  // 8. run_command inputSchema has prompt, command, expected_output as required fields
-  it("run_command inputSchema has prompt, command, expected_output as required fields", () => {
+  // 8. run_command inputSchema has prompt and command as required fields
+  it("run_command inputSchema has prompt and command as required fields", () => {
     const tool = TOOL_DEFINITIONS.find((t) => t.name === "run_command")!;
     expect(tool).toBeDefined();
     const props = tool.inputSchema.properties as unknown as Record<string, { type: string }>;
     expect(props["prompt"]).toBeDefined();
     expect(props["command"]).toBeDefined();
     expect(props["expected_output"]).toBeDefined();
+    expect(props["interpret"]).toBeDefined();
+    expect(props["max_output_chars"]).toBeDefined();
     const required = (tool.inputSchema as { required?: string[] }).required ?? [];
     expect(required).toContain("prompt");
     expect(required).toContain("command");
-    expect(required).toContain("expected_output");
-    // cwd and model are optional
+    expect(required).not.toContain("expected_output");
+    // cwd, model, and raw-output controls are optional
     expect(required).not.toContain("cwd");
     expect(required).not.toContain("model");
+    expect(required).not.toContain("interpret");
+    expect(required).not.toContain("max_output_chars");
   });
 
   // 9. declare_working_dirs inputSchema has paths as required array field
@@ -132,5 +137,14 @@ describe("TOOL_DEFINITIONS", () => {
       const tool = TOOL_DEFINITIONS.find((t) => t.name === name)!;
       expect((tool.inputSchema as { required?: string[] }).required).toEqual(["prompt", "command"]);
     }
+  });
+
+  it("feedback inputSchema requires issue", () => {
+    const tool = TOOL_DEFINITIONS.find((t) => t.name === "feedback")!;
+    expect(tool).toBeDefined();
+    const props = tool.inputSchema.properties as unknown as Record<string, { type: string }>;
+    expect(props["issue"]).toBeDefined();
+    const required = (tool.inputSchema as { required?: string[] }).required ?? [];
+    expect(required).toEqual(["issue"]);
   });
 });

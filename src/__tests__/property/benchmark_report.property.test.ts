@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 22: Benchmark report completeness
+// Feature: orchestrama, Property 22: Benchmark report completeness
 // For any list of model names passed to `benchmark_models` (with mocked Ollama),
 // the returned report should contain an entry for every model in the list, and
 // each entry should include `latency`, `throughput`, and `responseLength` fields

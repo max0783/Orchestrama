@@ -99,7 +99,7 @@ const BASE_CONFIG: BridgeConfig = {
   queueMaxSize: 10,
   numParallel: 1,
   requestTimeoutMs: 300000,
-  reductionLogPath: "./ollama-bridge-reductions.jsonl",
+  reductionLogPath: "./orchestrama-reductions.jsonl",
   logLevel: "info",
   disableProgress: false,
 };

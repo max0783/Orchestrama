@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 19: OOM error classification and fallback
+// Feature: orchestrama, Property 19: OOM error classification and fallback
 // For any Ollama error response whose body contains one of the OOM substrings,
 // the bridge should classify the error as `local_resource_exhausted` and retry
 // with the first available model from `BRIDGE_FALLBACK_MODELS`.

@@ -40,7 +40,7 @@ export interface BridgeConfig {
   numParallel: number;
   /** BRIDGE_REQUEST_TIMEOUT_MS — default 300000 */
   requestTimeoutMs: number;
-  /** BRIDGE_REDUCTION_LOG — default "./ollama-bridge-reductions.jsonl" */
+  /** BRIDGE_REDUCTION_LOG — default "./orchestrama-reductions.jsonl" */
   reductionLogPath: string;
   /** BRIDGE_LOG_LEVEL — "info" | "debug" */
   logLevel: "info" | "debug";

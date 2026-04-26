@@ -318,7 +318,7 @@ export function createQueryHandler(
           effectiveContextWindow = Math.floor(effectiveContextWindow / 2);
           halvings++;
           process.stderr.write(
-            `[ollama-mcp-bridge] auto_retry_overflow: prompt ~${promptOnlyTokens} tokens > context ${effectiveContextWindow * 2}, ` +
+            `[orchestrama] auto_retry_overflow: prompt ~${promptOnlyTokens} tokens > context ${effectiveContextWindow * 2}, ` +
               `retrying with context=${effectiveContextWindow} (halving ${halvings}/${MAX_HALVINGS})\n`
           );
         }
@@ -344,7 +344,7 @@ export function createQueryHandler(
     // Warn (stderr only) when the full payload is large but chunking will handle it
     if (tokenEstimate > effectiveContextWindow) {
       process.stderr.write(
-        `[ollama-mcp-bridge] token_budget: payload ~${tokenEstimate} tokens exceeds context window ` +
+        `[orchestrama] token_budget: payload ~${tokenEstimate} tokens exceeds context window ` +
           `${effectiveContextWindow} — Map-Reduce chunking will be used\n`
       );
     }
@@ -353,7 +353,7 @@ export function createQueryHandler(
     // 6. Log invocation details to stderr (Req 7.1)
     // -----------------------------------------------------------------------
     process.stderr.write(
-      `[ollama-mcp-bridge] query_local_model | model=${resolvedModel} | files=${fileCount} | tokens=${tokenEstimate}\n`
+      `[orchestrama] query_local_model | model=${resolvedModel} | files=${fileCount} | tokens=${tokenEstimate}\n`
     );
 
     // -----------------------------------------------------------------------
@@ -431,7 +431,7 @@ export function createQueryHandler(
 
             // Log the fallback attempt (Req 17.5)
             process.stderr.write(
-              `[ollama-mcp-bridge] OOM on ${usedModel}, trying fallback: ${fallbackModel}\n`
+              `[orchestrama] OOM on ${usedModel}, trying fallback: ${fallbackModel}\n`
             );
 
             try {
@@ -473,7 +473,7 @@ export function createQueryHandler(
       // -----------------------------------------------------------------------
       const responseTimeMs = Date.now() - invocationStart;
       process.stderr.write(
-        `[ollama-mcp-bridge] query_local_model completed | model=${usedModel} | responseTime=${responseTimeMs}ms\n`
+        `[orchestrama] query_local_model completed | model=${usedModel} | responseTime=${responseTimeMs}ms\n`
       );
 
       // -----------------------------------------------------------------------

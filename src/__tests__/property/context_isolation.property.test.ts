@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 3: Map-phase context isolation
+// Feature: orchestrama, Property 3: Map-phase context isolation
 // For any payload that requires N > 1 chunks, each of the N Ollama calls in the
 // Map phase should be sent with context: null (not the context token array returned
 // by a previous chunk call).

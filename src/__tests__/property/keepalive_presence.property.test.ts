@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 14: Keep-alive field presence
+// Feature: orchestrama, Property 14: Keep-alive field presence
 // For any request sent to the Ollama /api/generate endpoint, the request body
 // should contain a `keep_alive` field equal to the configured OLLAMA_KEEP_ALIVE value.
 //

@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 8: Chunk size invariant
+// Feature: orchestrama, Property 8: Chunk size invariant
 // For any payload whose token estimate exceeds contextWindow, every chunk produced
 // by the chunker should have a token estimate <= contextWindow * 0.9.
 //

@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 10: Model resolution precedence
+// Feature: orchestrama, Property 10: Model resolution precedence
 // For any invocation, the model used should follow this precedence:
 //   (1) explicit `model` parameter if provided,
 //   (2) first capability-map pattern match if no explicit model,

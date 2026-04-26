@@ -1,5 +1,5 @@
 /**
- * Interactive arrow-key selector for the ollama-mcp-bridge console.
+ * Interactive arrow-key selector for the orchestrama console.
  *
  * Provides `selectOne` and `selectMany` functions that render an inline
  * terminal list driven by arrow keys (↑/↓), Space (multi-select toggle),

@@ -64,7 +64,7 @@ function generateJsonSnippet(): object {
   const serverPath = path.resolve(__dirname, "../../dist/server.js");
   return {
     mcpServers: {
-      "ollama-mcp-bridge": {
+      "orchestrama": {
         command: "node",
         args: [serverPath],
         env: {
@@ -87,7 +87,7 @@ function generateTomlSnippet(): string {
   const keepAlive = getEnv("OLLAMA_KEEP_ALIVE", "10m");
 
   return [
-    `[mcp_servers.ollama-mcp-bridge]`,
+    `[mcp_servers.orchestrama]`,
     `command = "node"`,
     `args = ["${serverPath}"]`,
     `env = { "OLLAMA_BASE_URL" = "${ollamaBaseUrl}", "OLLAMA_DEFAULT_MODEL" = "${defaultModel}", "OLLAMA_CONTEXT_WINDOW" = "${contextWindow}", "OLLAMA_KEEP_ALIVE" = "${keepAlive}" }`,

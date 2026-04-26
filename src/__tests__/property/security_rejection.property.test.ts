@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 5: Security rejection for out-of-bounds paths
+// Feature: orchestrama, Property 5: Security rejection for out-of-bounds paths
 // For any file path whose resolved real path falls outside all configured allowed
 // directories (including symlinks that point outside), the bridge should include
 // `[SECURITY ERROR: path outside allowed directories]` in the payload entry and

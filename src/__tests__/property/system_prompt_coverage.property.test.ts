@@ -1,9 +1,9 @@
-// Feature: ollama-mcp-bridge, Property 11: System prompt task-type coverage
+// Feature: orchestrama, Property 11: System prompt task-type coverage
 // For any task type (code_review, log_analysis, summarization, generic), the
 // system prompt built by SystemPromptInjector.build(taskType) should contain
 // the required instruction keywords for that task type.
 //
-// Feature: ollama-mcp-bridge, Property 12: System prompt override precedence
+// Feature: orchestrama, Property 12: System prompt override precedence
 // For any invocation, the active system prompt should be: (1) the system_prompt
 // parameter if provided, (2) BRIDGE_SYSTEM_PROMPT env var if set, (3) the
 // built-in default. Higher-priority values should completely replace lower-priority ones.

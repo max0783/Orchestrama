@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 18: Binary file exclusion
+// Feature: orchestrama, Property 18: Binary file exclusion
 // For any file whose byte content contains a null byte (`\0`) or is not valid
 // UTF-8, the file reader should exclude it from the payload regardless of
 // .bridgeignore contents.

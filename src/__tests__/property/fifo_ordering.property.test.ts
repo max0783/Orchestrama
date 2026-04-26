@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 20: FIFO queue ordering
+// Feature: orchestrama, Property 20: FIFO queue ordering
 // For any sequence of N concurrent requests arriving in a known order, the
 // requests should be dispatched to Ollama in that same FIFO order.
 //

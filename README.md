@@ -61,7 +61,11 @@ The MCP server is what your AI orchestrator connects to. It exposes these tools:
 | `cargo_command`, `go_command`, `dotnet_command`, `mvn_command`, `gradle_command` | Run language-specific build tools |
 | `ollama_command` | Run Ollama CLI commands |
 | `declare_working_dirs` | Declare session-scoped working directories for dynamic access |
+| `feedback` | Report MCP failures/inefficiencies and get a compact corrective rule |
 | `setup_bridge` | Generate client-specific configuration snippet plus usage guide |
+
+Command tools accept `prompt` plus `command`. Use `interpret: false` when the caller only needs raw exit code/output; this skips the model call and is preferred for builds, tests, status checks, and other validation commands. Use `max_output_chars` to cap output before interpretation.
+Use MCP tools first and wait for their response; if a tool fails or lacks enough detail, call `feedback` before falling back to a real command.
 
 ### Wiring into Kiro
 
@@ -71,7 +75,7 @@ The MCP server is what your AI orchestrator connects to. It exposes these tools:
 ```json
 {
   "mcpServers": {
-    "ollama-mcp-bridge": {
+    "orchestrama": {
       "command": "node",
       "args": ["/absolute/path/to/dist/server.js"],
       "env": {
@@ -227,7 +231,7 @@ Both the MCP server and console read the same environment variables. Copy `.env.
 | `BRIDGE_QUEUE_MAX_SIZE` | `10` | Maximum queued requests before rejection |
 | `BRIDGE_REQUEST_TIMEOUT_MS` | `300000` | Per-request timeout in milliseconds |
 | `BRIDGE_SYSTEM_PROMPT` | _(built-in)_ | Override the system prompt injected into every query |
-| `BRIDGE_REDUCTION_LOG` | `./ollama-bridge-reductions.jsonl` | Path to the token-reduction log file |
+| `BRIDGE_REDUCTION_LOG` | `./orchestrama-reductions.jsonl` | Path to the token-reduction log file |
 | `BRIDGE_LOG_LEVEL` | `info` | `info` or `debug` (debug logs payload previews) |
 | `BRIDGE_DISABLE_PROGRESS` | `false` | Set to `true` to suppress MCP progress notifications |
 | `BRIDGE_KEEPALIVE_ON_START` | `false` | Set to `true` to pre-warm the default model at startup |
@@ -336,7 +340,7 @@ The wizard runs six phases:
 
    The report is appended to `ollama-benchmark.log`.
 
-6. **Configuration Acceptance** — Pick a category (or enter a custom model/context). The selected model and context window are applied immediately. If Flash Attention is recommended, `OLLAMA_FLASH_ATTENTION=1` is set and you're reminded to persist it in your shell profile.
+6. **Configuration Acceptance** — Pick a category (or enter a custom model/context). The selected model and context window are applied immediately. The advisor also derives MCP file-context limits from the chosen context window, so larger windows such as 64K or 128K allow proportionally larger `context_files` payloads. If Flash Attention is recommended, `OLLAMA_FLASH_ATTENTION=1` is set and you're reminded to persist it in your shell profile.
 
 ### Example report
 
@@ -415,7 +419,7 @@ Use **6. View Capability Map** in the console to inspect the current map and tes
 
 When you set a new default model via **3. Set Default Model** and skip the context window picker, the bridge queries Ollama's `/api/show` endpoint and reads the model's native context length from its architecture metadata. For example, setting a 32k model will automatically update `contextWindow` to `32768` without manual configuration.
 
-You can also set the context window explicitly via **10. Edit Bridge Limits** or the `OLLAMA_CONTEXT_WINDOW` env var.
+You can also set the context window explicitly via **10. Edit Bridge Limits** or the `OLLAMA_CONTEXT_WINDOW` env var. When accepting a Benchmark Advisor recommendation, Orchestrama also writes matching `BRIDGE_MAX_CONTEXT_FILES`, `BRIDGE_MAX_FILE_TOKENS`, and `BRIDGE_MAX_TOTAL_CONTEXT_TOKENS` values so MCP file reads can use the larger window coherently.
 
 ---
 
@@ -427,10 +431,10 @@ View aggregate stats in the console with **7. View Reduction Stats**, or inspect
 
 ```bash
 # Windows PowerShell
-Get-Content ollama-bridge-reductions.jsonl -Wait
+Get-Content orchestrama-reductions.jsonl -Wait
 
 # macOS / Linux
-tail -f ollama-bridge-reductions.jsonl
+tail -f orchestrama-reductions.jsonl
 ```
 
 ---

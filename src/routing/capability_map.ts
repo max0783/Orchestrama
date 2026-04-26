@@ -32,7 +32,7 @@ export class CapabilityRouter {
     // 1. Explicit model wins
     if (explicitModel && explicitModel.trim() !== "") {
       process.stderr.write(
-        `[ollama-mcp-bridge] Model: ${explicitModel} (explicit)\n`
+        `[orchestrama] Model: ${explicitModel} (explicit)\n`
       );
       return explicitModel;
     }
@@ -42,7 +42,7 @@ export class CapabilityRouter {
     for (const [pattern, model] of Object.entries(this.capabilityMap)) {
       if (lowerPrompt.includes(pattern.toLowerCase())) {
         process.stderr.write(
-          `[ollama-mcp-bridge] Capability map match: pattern="${pattern}" → model="${model}"\n`
+          `[orchestrama] Capability map match: pattern="${pattern}" → model="${model}"\n`
         );
         return model;
       }
@@ -53,7 +53,7 @@ export class CapabilityRouter {
       this.defaultModel && this.defaultModel.trim() !== ""
         ? this.defaultModel
         : "llama3.1:8b";
-    process.stderr.write(`[ollama-mcp-bridge] Model: ${resolved} (default)\n`);
+    process.stderr.write(`[orchestrama] Model: ${resolved} (default)\n`);
     return resolved;
   }
 

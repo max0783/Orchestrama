@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 1: Response pass-through integrity
+// Feature: orchestrama, Property 1: Response pass-through integrity
 // For any non-empty prompt and any response string returned by the Ollama mock,
 // the `query_local_model` tool should return that exact response string in the
 // MCP content field without modification or truncation.

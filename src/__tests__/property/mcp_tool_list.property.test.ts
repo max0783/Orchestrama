@@ -23,6 +23,7 @@ const EXPECTED_TOOLS = [
   "get_content",
   ...PROGRAM_COMMAND_SPECS.map((spec) => spec.toolName),
   "declare_working_dirs",
+  "feedback",
   "setup_bridge",
 ];
 

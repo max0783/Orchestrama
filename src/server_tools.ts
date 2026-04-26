@@ -35,6 +35,10 @@ function createProgramCommandToolDefinition(spec: (typeof PROGRAM_COMMAND_SPECS)
           type: "number",
           description: "Maximum output characters sent to the model, from 1000 to 64000. Defaults to 12000.",
         },
+        interpret: {
+          type: "boolean",
+          description: "When false, return bounded raw command output without calling the model. Defaults to true.",
+        },
         model: { type: "string", description: "Override the model to use (optional)." },
         intent: { type: "string", description: "Optional intent pattern for the model response." },
         system_prompt: { type: "string", description: "Optional system prompt override." },
@@ -157,9 +161,9 @@ export const TOOL_DEFINITIONS = [
   {
     name: "run_command",
     description:
-      "Execute a shell command, capture its output, and send it to the local Ollama model for interpretation. " +
-      "Provide a prompt (what you want to know), a command (what to run), and expected_output (what the output should contain). " +
-      "The bridge runs the command, feeds the output to the model, and returns a concise answer. " +
+      "Execute a shell command, capture its output, and optionally send it to the local Ollama model for interpretation. " +
+      "Provide a prompt (what you want to know) and a command (what to run). " +
+      "Set interpret=false for cheap raw output when you only need exit code or logs. " +
       "\n\n" +
       "Common repo-inspection examples (pipe or flag to limit output):\n" +
       "- `rg \"TODO\" --type ts -l` — list TypeScript files containing TODO\n" +
@@ -185,7 +189,7 @@ export const TOOL_DEFINITIONS = [
         },
         expected_output: {
           type: "string",
-          description: "Description of what the command output should contain (used to frame the model's interpretation).",
+          description: "Optional description of what the command output should contain (used to frame the model's interpretation).",
         },
         cwd: {
           type: "string",
@@ -195,8 +199,16 @@ export const TOOL_DEFINITIONS = [
           type: "string",
           description: "Override the model to use (optional).",
         },
+        interpret: {
+          type: "boolean",
+          description: "When false, return bounded raw command output without calling the model. Defaults to true.",
+        },
+        max_output_chars: {
+          type: "number",
+          description: "Maximum output characters sent to the model or returned raw, from 1000 to 64000. Defaults to 12000.",
+        },
       },
-      required: ["prompt", "command", "expected_output"],
+      required: ["prompt", "command"],
     },
   },
   {
@@ -237,6 +249,10 @@ export const TOOL_DEFINITIONS = [
           type: "number",
           description: "Maximum rg output characters to send to the model, from 1000 to 64000. Defaults to 12000.",
         },
+        interpret: {
+          type: "boolean",
+          description: "When false, return bounded raw rg output without calling the model. Defaults to true.",
+        },
         model: { type: "string", description: "Override the model to use (optional)." },
         intent: { type: "string", description: "Optional intent pattern for the model response." },
         system_prompt: { type: "string", description: "Optional system prompt override." },
@@ -273,6 +289,10 @@ export const TOOL_DEFINITIONS = [
         max_output_chars: {
           type: "number",
           description: "Maximum gh output characters to send to the model, from 1000 to 64000. Defaults to 12000.",
+        },
+        interpret: {
+          type: "boolean",
+          description: "When false, return bounded raw gh output without calling the model. Defaults to true.",
         },
         model: { type: "string", description: "Override the model to use (optional)." },
         intent: { type: "string", description: "Optional intent pattern for the model response." },
@@ -340,6 +360,38 @@ export const TOOL_DEFINITIONS = [
         },
       },
       required: ["paths"],
+    },
+  },
+  {
+    name: "feedback",
+    description:
+      "Report a failed, inefficient, or confusing MCP tool use and get a compact instruction for avoiding the same issue next time. " +
+      "Use this after an MCP tool fails or wastes tokens before falling back to a real command.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        issue: {
+          type: "string",
+          description: "Short description of what went wrong.",
+        },
+        tool: {
+          type: "string",
+          description: "Tool involved, if any.",
+        },
+        command: {
+          type: "string",
+          description: "Command or arguments involved, if any.",
+        },
+        observed: {
+          type: "string",
+          description: "Observed behavior or error.",
+        },
+        expected: {
+          type: "string",
+          description: "Expected behavior.",
+        },
+      },
+      required: ["issue"],
     },
   },
   {

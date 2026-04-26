@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 23: Invocation log fields
+// Feature: orchestrama, Property 23: Invocation log fields
 // For any `query_local_model` invocation with known parameters, the stderr log
 // output should contain the tool name, the resolved model name, the number of
 // files in `context_files`, and the estimated payload token count.

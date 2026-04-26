@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 16: Progress notification count during Map-Reduce
+// Feature: orchestrama, Property 16: Progress notification count during Map-Reduce
 // For any payload requiring N chunks in the Map phase, exactly N chunk-progress
 // notifications should be emitted during that Map phase (one per chunk completion).
 //

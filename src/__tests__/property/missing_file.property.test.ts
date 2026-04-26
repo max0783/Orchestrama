@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 6: Missing file error marker
+// Feature: orchestrama, Property 6: Missing file error marker
 // For any path in `context_files` that does not exist on the file system, the
 // payload entry for that path should contain `[ERROR: file not found]`, and the
 // remaining files should still be processed.

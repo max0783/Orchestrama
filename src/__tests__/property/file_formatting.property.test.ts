@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 4: File payload formatting
+// Feature: orchestrama, Property 4: File payload formatting
 // For any list of (path, content) pairs where the files exist and are within
 // allowed directories, `formatForPayload` should produce a string that contains
 // the substring `### File: {path}\n{content}` for every entry in the list.

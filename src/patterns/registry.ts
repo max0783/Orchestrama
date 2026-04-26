@@ -221,14 +221,14 @@ export class PatternRegistry {
       parsed = JSON.parse(raw);
     } catch {
       process.stderr.write(
-        "[ollama-mcp-bridge] WARNING: BRIDGE_PATTERNS_FILE contains invalid JSON, starting with empty custom patterns\n"
+        "[orchestrama] WARNING: BRIDGE_PATTERNS_FILE contains invalid JSON, starting with empty custom patterns\n"
       );
       return;
     }
 
     if (!Array.isArray(parsed)) {
       process.stderr.write(
-        "[ollama-mcp-bridge] WARNING: BRIDGE_PATTERNS_FILE contains invalid JSON, starting with empty custom patterns\n"
+        "[orchestrama] WARNING: BRIDGE_PATTERNS_FILE contains invalid JSON, starting with empty custom patterns\n"
       );
       return;
     }
@@ -298,7 +298,7 @@ export class PatternRegistry {
       await fs.writeFile(this.patternsFilePath, JSON.stringify(persisted, null, 2), "utf-8");
     } catch (err) {
       process.stderr.write(
-        `[ollama-mcp-bridge] WARNING: Failed to persist patterns to ${this.patternsFilePath}: ${err}\n`
+        `[orchestrama] WARNING: Failed to persist patterns to ${this.patternsFilePath}: ${err}\n`
       );
     }
   }

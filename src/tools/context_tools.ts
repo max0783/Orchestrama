@@ -22,6 +22,7 @@ interface CommonModelInput {
   intent: string | undefined;
   system_prompt: string | undefined;
   options: ModelOptions | undefined;
+  interpret: boolean;
 }
 
 interface CommandResult {
@@ -48,7 +49,7 @@ export const PROGRAM_COMMAND_SPECS: ProgramCommandSpec[] = [
   { toolName: "tsc_command", executable: "tsc", displayName: "TypeScript compiler", examples: ["--noEmit", "-p tsconfig.json"] },
   { toolName: "eslint_command", executable: "eslint", displayName: "ESLint", examples: [".", "src --max-warnings=0"] },
   { toolName: "prettier_command", executable: "prettier", displayName: "Prettier", examples: ["--check .", "--write src"] },
-  { toolName: "vitest_command", executable: "vitest", displayName: "Vitest", examples: ["--run", "--run src/example.test.ts"] },
+  { toolName: "vitest_command", executable: "npx vitest", displayName: "Vitest", examples: ["--run", "--run src/example.test.ts"] },
   { toolName: "jest_command", executable: "jest", displayName: "Jest", examples: ["--runInBand", "src/example.test.ts"] },
   { toolName: "playwright_command", executable: "playwright", displayName: "Playwright", examples: ["test", "test --project=chromium"] },
   { toolName: "python_command", executable: "python", displayName: "Python", examples: ["--version", "-m pytest"] },
@@ -174,6 +175,7 @@ function parseCommonModelInput(args: Record<string, unknown>): CommonModelInput 
     intent: optionalString(args, "intent"),
     system_prompt: optionalString(args, "system_prompt"),
     options: optionalOptions(args),
+    interpret: optionalBoolean(args, "interpret") ?? true,
   };
 }
 
@@ -283,6 +285,17 @@ function truncateOutput(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n\n[output truncated: ${text.length - maxChars} chars omitted]`;
 }
 
+function rawResponse(command: string, cwd: string, exitCode: number | null, output: string) {
+  const text = [
+    `Command: \`${command}\``,
+    `Cwd: ${cwd}`,
+    `Exit code: ${exitCode ?? "unknown"}`,
+    ``,
+    output,
+  ].join("\n");
+  return { content: [{ type: "text" as const, text }] };
+}
+
 function buildQueryArgs(common: CommonModelInput, context: string, source: string): Record<string, unknown> {
   return {
     prompt: [
@@ -346,7 +359,11 @@ export function createRgSearchHandler(deps: ContextToolDeps) {
       result.stderr ? `\n[stderr]\n${result.stderr}` : "",
     ].join("\n");
 
-    return queryHandler(buildQueryArgs(common, truncateOutput(raw, maxOutputChars), "rg_search"));
+    const output = truncateOutput(raw, maxOutputChars);
+    if (!common.interpret) {
+      return rawResponse(`rg ${rgArgs.join(" ")}`, cwd, result.exitCode, output);
+    }
+    return queryHandler(buildQueryArgs(common, output, "rg_search"));
   };
 }
 
@@ -383,7 +400,11 @@ export function createGhCommandHandler(deps: ContextToolDeps) {
       result.stderr ? `\n[stderr]\n${result.stderr}` : "",
     ].join("\n");
 
-    return queryHandler(buildQueryArgs(common, truncateOutput(raw, maxOutputChars), "gh_command"));
+    const output = truncateOutput(raw, maxOutputChars);
+    if (!common.interpret) {
+      return rawResponse(`gh ${ghArgs.join(" ")}`, cwd, result.exitCode, output);
+    }
+    return queryHandler(buildQueryArgs(common, output, "gh_command"));
   };
 }
 
@@ -421,7 +442,11 @@ export function createProgramCommandHandler(deps: ContextToolDeps, executable: s
       result.stderr ? `\n[stderr]\n${result.stderr}` : "",
     ].join("\n");
 
-    return queryHandler(buildQueryArgs(common, truncateOutput(raw, maxOutputChars), source));
+    const output = truncateOutput(raw, maxOutputChars);
+    if (!common.interpret) {
+      return rawResponse(commandLine, cwd, result.exitCode, output);
+    }
+    return queryHandler(buildQueryArgs(common, output, source));
   };
 }
 

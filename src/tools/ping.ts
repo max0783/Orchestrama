@@ -24,7 +24,7 @@ export function createPingHandler(ollamaClient: IOllamaClient, defaultModel: str
 
     // Log warm/cold start status to stderr (Req 13.6)
     process.stderr.write(
-      `[ollama-mcp-bridge] ping_model: ${model} - ${status} start (${result.responseTimeMs}ms)\n`
+      `[orchestrama] ping_model: ${model} - ${status} start (${result.responseTimeMs}ms)\n`
     );
 
     const text = `Model: ${model}\nStatus: ${status} start\nResponse time: ${result.responseTimeMs}ms`;

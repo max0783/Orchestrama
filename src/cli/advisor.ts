@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ollama-mcp-bridge benchmark advisor CLI
+ * orchestrama benchmark advisor CLI
  *
  * Runs the full Benchmark Advisor wizard:
  *   1. Detects GPU/RAM hardware

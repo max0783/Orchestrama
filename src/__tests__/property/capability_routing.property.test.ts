@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 15: Capability map first-match routing
+// Feature: orchestrama, Property 15: Capability map first-match routing
 // For any prompt string and capability map, resolveModel(prompt) should return
 // the model associated with the first pattern (in insertion order) that is a
 // case-insensitive substring of the prompt, or the default model if no pattern

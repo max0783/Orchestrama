@@ -39,6 +39,7 @@ import { createSetupBridgeHandler } from "./tools/setup_bridge.js";
 import { SetupTool } from "./tools/setup_bridge_tool.js";
 import { createRunCommandHandler } from "./tools/run_command.js";
 import { createDeclareWorkingDirsHandler } from "./tools/declare_working_dirs.js";
+import { createFeedbackHandler } from "./tools/feedback.js";
 import {
   createGetContentHandler,
   createGhCommandHandler,
@@ -142,6 +143,7 @@ async function main(): Promise<void> {
     registry: sessionRegistry,
     sessionId: SESSION_ID,
   });
+  const feedbackHandler = createFeedbackHandler();
   const rgSearchHandler = createRgSearchHandler({
     queryHandler,
     pathValidator,
@@ -184,6 +186,8 @@ async function main(): Promise<void> {
         return runCommandHandler(args);
       case "declare_working_dirs":
         return declareWorkingDirsHandler(args);
+      case "feedback":
+        return feedbackHandler(args);
       case "rg_search":
         return rgSearchHandler(args);
       case "gh_command":

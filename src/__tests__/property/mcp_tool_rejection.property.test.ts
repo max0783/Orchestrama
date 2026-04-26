@@ -39,6 +39,8 @@ function dispatch(name: string): void {
       return;
     case "declare_working_dirs":
       return;
+    case "feedback":
+      return;
     case "setup_bridge":
       return;
     default:
@@ -72,6 +74,7 @@ describe("Property 2: MCP server rejects unknown tool names", () => {
             "get_content",
             ...PROGRAM_COMMAND_NAMES,
             "declare_working_dirs",
+            "feedback",
             "setup_bridge",
           ].includes(s)),
           (name) => {

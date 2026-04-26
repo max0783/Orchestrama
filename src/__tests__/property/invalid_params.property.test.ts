@@ -1,4 +1,4 @@
-// Feature: ollama-mcp-bridge, Property 2: Invalid parameter rejection
+// Feature: orchestrama, Property 2: Invalid parameter rejection
 // For any invocation of `query_local_model` where `prompt` is not a string,
 // or `context_files` is not an array of strings, the bridge should return an
 // MCP error with code `invalid_params`.

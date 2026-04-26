@@ -19,7 +19,7 @@ Connect your AI orchestrator to a local [Ollama](https://ollama.com) instance vi
 ### Install & Build
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/max0783/Orchestrama
 cd orchestrama
 npm install
 npm run build

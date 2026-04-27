@@ -12,6 +12,7 @@ import {
   DEFAULT_MAX_FILE_TOKENS,
   DEFAULT_MAX_TOTAL_CONTEXT_TOKENS,
 } from "../config.js";
+import type { BridgeConfig } from "../types.js";
 
 export interface SuggestedBridgeContextLimits {
   maxContextFiles: number;
@@ -42,4 +43,23 @@ export function suggestBridgeContextLimits(
     maxFileTokens,
     maxTotalContextTokens,
   };
+}
+
+export function applySuggestedBridgeContextLimits(
+  config: BridgeConfig,
+  contextWindow: number
+): SuggestedBridgeContextLimits {
+  const suggestedLimits = suggestBridgeContextLimits(contextWindow);
+
+  config.maxContextFiles = suggestedLimits.maxContextFiles;
+  config.maxFileTokens = suggestedLimits.maxFileTokens;
+  config.maxTotalContextTokens = suggestedLimits.maxTotalContextTokens;
+
+  process.env["BRIDGE_MAX_CONTEXT_FILES"] = String(suggestedLimits.maxContextFiles);
+  process.env["BRIDGE_MAX_FILE_TOKENS"] = String(suggestedLimits.maxFileTokens);
+  process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] = String(
+    suggestedLimits.maxTotalContextTokens
+  );
+
+  return suggestedLimits;
 }

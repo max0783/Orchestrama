@@ -10,7 +10,10 @@
 import type { BridgeConfig } from "../types.js";
 import type { Recommendation } from "./types.js";
 import { writeEnvKeys } from "../console/dotenv_writer.js";
-import { suggestBridgeContextLimits } from "./context_limits.js";
+import {
+  applySuggestedBridgeContextLimits,
+  suggestBridgeContextLimits,
+} from "./context_limits.js";
 
 /**
  * Applies a recommendation to the live BridgeConfig, updates process.env,
@@ -35,14 +38,9 @@ export async function applyRecommendation(
   process.env["OLLAMA_NUM_CTX"] = String(recommendation.contextWindow);
   process.env["OLLAMA_CONTEXT_WINDOW"] = String(recommendation.contextWindow);
 
-  const suggestedLimits = suggestBridgeContextLimits(recommendation.contextWindow);
-  config.maxContextFiles = suggestedLimits.maxContextFiles;
-  config.maxFileTokens = suggestedLimits.maxFileTokens;
-  config.maxTotalContextTokens = suggestedLimits.maxTotalContextTokens;
-  process.env["BRIDGE_MAX_CONTEXT_FILES"] = String(suggestedLimits.maxContextFiles);
-  process.env["BRIDGE_MAX_FILE_TOKENS"] = String(suggestedLimits.maxFileTokens);
-  process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] = String(
-    suggestedLimits.maxTotalContextTokens
+  const suggestedLimits = applySuggestedBridgeContextLimits(
+    config,
+    recommendation.contextWindow
   );
 
   const envKeys: Record<string, string> = {

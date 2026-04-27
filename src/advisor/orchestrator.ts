@@ -41,7 +41,9 @@ import {
   formatRecommendationReport,
 } from "./report_formatter.js";
 import { applyRecommendation, formatAcceptanceConfirmation } from "./config_acceptor.js";
-import { suggestBridgeContextLimits } from "./context_limits.js";
+import {
+  applySuggestedBridgeContextLimits,
+} from "./context_limits.js";
 import { createBenchmarkHandler } from "../tools/benchmark.js";
 import type { ModelResult } from "../tools/benchmark.js";
 import { selectOne, SelectorCancelledError, type SelectItem } from "../console/selector.js";
@@ -596,15 +598,7 @@ async function runPhase6(
       config.contextWindow = contextWindow;
       process.env["OLLAMA_NUM_CTX"] = String(contextWindow);
       process.env["OLLAMA_CONTEXT_WINDOW"] = String(contextWindow);
-      const suggestedLimits = suggestBridgeContextLimits(contextWindow);
-      config.maxContextFiles = suggestedLimits.maxContextFiles;
-      config.maxFileTokens = suggestedLimits.maxFileTokens;
-      config.maxTotalContextTokens = suggestedLimits.maxTotalContextTokens;
-      process.env["BRIDGE_MAX_CONTEXT_FILES"] = String(suggestedLimits.maxContextFiles);
-      process.env["BRIDGE_MAX_FILE_TOKENS"] = String(suggestedLimits.maxFileTokens);
-      process.env["BRIDGE_MAX_TOTAL_CONTEXT_TOKENS"] = String(
-        suggestedLimits.maxTotalContextTokens
-      );
+      const suggestedLimits = applySuggestedBridgeContextLimits(config, contextWindow);
 
       await writeEnvKeys({
         OLLAMA_DEFAULT_MODEL: modelName,

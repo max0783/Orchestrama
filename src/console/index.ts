@@ -31,6 +31,7 @@ import { selectOne, selectMany, SelectorCancelledError, setReadlineInterface } f
 import type { SelectItem } from "./selector.js";
 import { writeEnvKeys } from "./dotenv_writer.js";
 import { runBenchmarkAdvisor } from "../advisor/index.js";
+import { applySuggestedBridgeContextLimits } from "../advisor/context_limits.js";
 import {
   formatModelList,
   formatPingResult,
@@ -472,10 +473,24 @@ async function main(): Promise<void> {
               // Non-fatal — keep existing context window
             }
           }
+
+          const suggestedLimits = applySuggestedBridgeContextLimits(
+            config,
+            config.contextWindow
+          );
+          console.log(
+            `MCP context limits updated: ${suggestedLimits.maxTotalContextTokens.toLocaleString("en-US")} total tokens, ` +
+              `${suggestedLimits.maxFileTokens.toLocaleString("en-US")} per file, ` +
+              `${suggestedLimits.maxContextFiles} files`
+          );
+
           // Persist to .env
           await writeEnvKeys({
             OLLAMA_DEFAULT_MODEL: modelName,
             OLLAMA_CONTEXT_WINDOW: String(config.contextWindow),
+            BRIDGE_MAX_CONTEXT_FILES: String(suggestedLimits.maxContextFiles),
+            BRIDGE_MAX_FILE_TOKENS: String(suggestedLimits.maxFileTokens),
+            BRIDGE_MAX_TOTAL_CONTEXT_TOKENS: String(suggestedLimits.maxTotalContextTokens),
           });
           break;
         }
